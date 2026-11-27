@@ -6,6 +6,7 @@ import {
 } from '../../engine/i18n';
 import { formatClock24 } from '../../engine/tagParser';
 import { useOsStore } from '../../store/useOsStore';
+import { AppIcon } from './AppIcon';
 
 export function SystemTray() {
   const clockMinutes = useOsStore((s) => s.clockMinutes);
@@ -107,21 +108,26 @@ export function SystemTray() {
                   key={n.id}
                   type="button"
                   onClick={() => clickNotification(n)}
-                  className={`flex w-full flex-col gap-0.5 px-3.5 py-2.5 text-left transition-colors hover:bg-[#252932] ${
+                  className={`flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-[#252932] ${
                     n.read ? 'opacity-60' : 'bg-[#212834]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-semibold text-white">
-                      {n.title}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10px] text-slate-400">
-                      {n.timestamp}
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] bg-[#2a2f3a]">
+                    <AppIcon appId={n.appId} className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold text-white">
+                        {n.title}
+                      </span>
+                      <span className="shrink-0 font-mono text-[10px] text-slate-400">
+                        {n.timestamp}
+                      </span>
+                    </div>
+                    <span className="line-clamp-2 text-[11px] text-slate-300">
+                      {n.body}
                     </span>
                   </div>
-                  <span className="line-clamp-2 text-[11px] text-slate-300">
-                    {n.body}
-                  </span>
                 </button>
               ))
             )}

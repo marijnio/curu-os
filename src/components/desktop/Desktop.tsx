@@ -15,6 +15,7 @@ import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
 import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 import { DesktopIcon } from './DesktopIcon';
+import { AppIcon } from './AppIcon';
 import { Window } from './Window';
 import { Taskbar } from './Taskbar';
 import { StartMenu } from './StartMenu';
@@ -273,11 +274,13 @@ export function Desktop() {
                 e.stopPropagation();
                 clickNotification(toast);
               }}
-              className="curu-toast-enter flex items-start justify-between gap-2 rounded-[2px] border border-[#3a3f4b] bg-[#1f2228] p-3 text-slate-100 shadow-xl transition-colors hover:border-[#4ca3dd] cursor-pointer"
+              className="curu-toast-enter flex items-start justify-between gap-2.5 rounded-[2px] border border-[#3a3f4b] bg-[#1f2228] p-3 text-slate-100 shadow-xl transition-colors hover:border-[#4ca3dd] cursor-pointer"
             >
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] bg-[#2a2f3a]">
+                <AppIcon appId={toast.appId} className="h-4 w-4" />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#4ca3dd]" />
                   <span className="truncate text-xs font-semibold text-white">
                     {toast.title}
                   </span>
@@ -298,7 +301,7 @@ export function Desktop() {
                   dismissToast(toast.id);
                 }}
                 aria-label={t.desktop.dismissNotification}
-                className="p-0.5 text-slate-400 hover:text-white"
+                className="shrink-0 p-0.5 text-slate-400 hover:text-white"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
