@@ -69,7 +69,9 @@ Your scenario repository stays pure content:
 
 ```text
 my-custom-scenario/
-├── .agent/skills/curu-scenario-author/SKILL.md
+├── .agent/
+│   ├── rules/curu-scenario-constraints.md
+│   └── skills/curu-scenario-author/SKILL.md
 ├── docker-compose.yml          # Runs ghcr.io/q-marijn/curu-os + ./scenarios mount
 ├── package.json                # Depends on github:q-marijn/curu-os#<tag>
 └── scenarios/
@@ -94,6 +96,8 @@ In your scenario repository, pin both `package.json` and `docker-compose.yml` to
 
 - `package.json`: `"curu-os": "github:q-marijn/curu-os#v0.2.0"`
 - `docker-compose.yml`: `image: ghcr.io/q-marijn/curu-os:0.2.0`
+
+When upgrading to a newer `curu-os` tag, run `npm install && npm run sync-skill` inside the scenario repo to refresh Antigravity's authoring skill and workspace constraints rule.
 
 ### 4. Containerized Deployment from a Scenario Repository
 

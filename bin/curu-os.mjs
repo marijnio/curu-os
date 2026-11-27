@@ -95,6 +95,68 @@ function writeIfMissing(filePath, content, created, skipped) {
   created.push(filePath);
 }
 
+function writeTargetFile(filePath, content, { overwrite, created, updated, skipped }) {
+  const existed = fs.existsSync(filePath);
+  if (existed && !overwrite) {
+    skipped.push(filePath);
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, 'utf8');
+  if (existed) {
+    updated.push(filePath);
+  } else {
+    created.push(filePath);
+  }
+}
+
+function buildScenarioConstraintsRule(engineVersion) {
+  return `---
+trigger: always_on
+---
+
+# Curu-OS Scenario Repository Constraints (Engine v${engineVersion})
+
+This repository contains **scenario content only** and runs on the external \`curu-os\` engine (\`v${engineVersion}\`).
+
+- **No UI or engine code here:** Never create React components, CSS, Vite config changes, or modify files inside \`node_modules/curu-os/\`.
+- **Author under \`scenarios/\` only:** Keep all narrative content inside \`scenarios/index.json\` and \`scenarios/<scenario_id>/\` (\`scenario.json\`, \`.ink\` scripts with optional \`INCLUDE\`, \`docs/*.md\`, \`media/*\`).
+- **Follow the authoring skill:** Read \`.agent/skills/curu-scenario-author/SKILL.md\` before authoring or editing scenarios, and use only the built-in desktop apps (\`Messages\`, \`Mail\`, \`File Explorer\`, \`Notes\`) and documented Ink \`# TAG\` directives.
+- **Respect engine boundaries:** Never invent unsupported \`# TAG\` directives or fake unsupported UI mechanics. If a requested feature is not supported by Curu-OS \`v${engineVersion}\`, clearly explain that it requires an engine update in the \`curu-os\` repository first.
+- **Always validate:** Run \`npm run validate\` after scenario edits to verify Ink compilation, \`scenario.json\` schemas, sender IDs, and asset paths.
+`;
+}
+
+function syncAgentFiles(targetDir, { overwrite }) {
+  const version = readEngineVersion();
+  const created = [];
+  const updated = [];
+  const skipped = [];
+
+  const skillSrc = path.join(
+    ENGINE_ROOT,
+    '.agent',
+    'skills',
+    'curu-scenario-author',
+    'SKILL.md'
+  );
+  if (fs.existsSync(skillSrc)) {
+    writeTargetFile(
+      path.join(targetDir, '.agent', 'skills', 'curu-scenario-author', 'SKILL.md'),
+      fs.readFileSync(skillSrc, 'utf8'),
+      { overwrite, created, updated, skipped }
+    );
+  }
+
+  writeTargetFile(
+    path.join(targetDir, '.agent', 'rules', 'curu-scenario-constraints.md'),
+    buildScenarioConstraintsRule(version),
+    { overwrite, created, updated, skipped }
+  );
+
+  return { version, created, updated, skipped };
+}
+
 function printHelp() {
   console.log(`curu-os v${readEngineVersion()} — Curu-OS Narrative Engine CLI
 
@@ -102,12 +164,13 @@ Usage:
   curu-os <command> [options]
 
 Commands:
-  dev       Start local Vite dev server with live Ink compilation & hot reload
-  build     Compile scenarios and build standalone static bundle
-  preview   Preview the built static bundle locally
-  compile   Compile .ink stories to .json in the scenarios directory
-  validate  Validate index.json, scenario.json manifests, Ink scripts, and assets
-  init      Scaffold a new standalone scenario repository
+  dev         Start local Vite dev server with live Ink compilation & hot reload
+  build       Compile scenarios and build standalone static bundle
+  preview     Preview the built static bundle locally
+  compile     Compile .ink stories to .json in the scenarios directory
+  validate    Validate index.json, scenario.json manifests, Ink scripts, and assets
+  init        Scaffold a new standalone scenario repository
+  sync-skill  Refresh Antigravity authoring skill & constraints rule from installed engine
 
 Options:
   --scenarios <dir>   Path to scenarios directory (default: ./scenarios or $CURU_SCENARIOS_DIR)
@@ -280,6 +343,7 @@ function runInit(args, flags) {
           'compile:ink': 'curu-os compile',
           build: 'curu-os build',
           preview: 'curu-os preview',
+          'sync-skill': 'curu-os sync-skill',
         },
         devDependencies: {
           'curu-os': engineRef,
@@ -447,6 +511,13 @@ Update \`package.json\` and \`docker-compose.yml\` to pin a specific Curu-OS rel
 - \`package.json\`: \`"curu-os": "github:q-marijn/curu-os#v0.2.0"\`
 - \`docker-compose.yml\`: \`image: ghcr.io/q-marijn/curu-os:0.2.0\`
 
+After upgrading the \`curu-os\` dependency, refresh Antigravity's authoring skill and workspace constraints rule:
+
+\`\`\`bash
+npm install
+npm run sync-skill
+\`\`\`
+
 ## Docker Deployment
 
 1. Copy \`docker-compose.yml\` and \`scenarios/\` onto your Docker host (or deploy directly from this repository).
@@ -457,21 +528,9 @@ Update \`package.json\` and \`docker-compose.yml\` to pin a specific Curu-OS rel
     skipped
   );
 
-  const skillSrc = path.join(
-    ENGINE_ROOT,
-    '.agent',
-    'skills',
-    'curu-scenario-author',
-    'SKILL.md'
-  );
-  if (fs.existsSync(skillSrc)) {
-    writeIfMissing(
-      path.join(targetDir, '.agent', 'skills', 'curu-scenario-author', 'SKILL.md'),
-      fs.readFileSync(skillSrc, 'utf8'),
-      created,
-      skipped
-    );
-  }
+  const synced = syncAgentFiles(targetDir, { overwrite: false });
+  created.push(...synced.created);
+  skipped.push(...synced.skipped);
 
   console.log(`[curu-os] Initialized scenario project in ${targetDir}`);
   console.log(`  Created ${created.length} file(s)${skipped.length ? `, skipped ${skipped.length} existing file(s)` : ''}.`);
@@ -481,6 +540,20 @@ Update \`package.json\` and \`docker-compose.yml\` to pin a specific Curu-OS rel
   }
   console.log('  npm install');
   console.log('  npm run dev');
+}
+
+function runSyncSkill(args) {
+  const targetDir = path.resolve(process.cwd(), args[0] || '.');
+  const { version, created, updated } = syncAgentFiles(targetDir, {
+    overwrite: true,
+  });
+
+  console.log(
+    `[curu-os] Synced Antigravity skill and constraints rule for engine v${version} in ${targetDir}:`
+  );
+  for (const file of [...created, ...updated]) {
+    console.log(`  - ${path.relative(targetDir, file)}`);
+  }
 }
 
 async function main() {
@@ -514,6 +587,9 @@ async function main() {
       break;
     case 'init':
       runInit(args, flags);
+      break;
+    case 'sync-skill':
+      runSyncSkill(args);
       break;
     default:
       console.error(`[curu-os] Unknown command: "${command}"`);
