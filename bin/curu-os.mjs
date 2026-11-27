@@ -409,7 +409,7 @@ scenarios/*/story.json
         storyFile: 'story.ink',
         theme: {
           osName: 'Curu-OS',
-          osVersion: 'v0.2',
+          osVersion: 'v0.3',
           wallpaperColor: '#1b2d6b',
         },
         contacts: [
