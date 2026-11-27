@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Bug,
   ChevronRight,
@@ -7,7 +6,6 @@ import {
   LogOut,
   Mail,
   MessageSquare,
-  RotateCcw,
   StickyNote,
   User,
 } from 'lucide-react';
@@ -25,11 +23,8 @@ export function StartMenu() {
   const closeApp = useOsStore((s) => s.closeApp);
   const openScenarioSelector = useOsStore((s) => s.openScenarioSelector);
   const logout = useOsStore((s) => s.logout);
-  const resetProgress = useOsStore((s) => s.resetProgress);
   const toggleStartMenu = useOsStore((s) => s.toggleStartMenu);
   const t = useOsStore(selectTranslations);
-
-  const [confirmReset, setConfirmReset] = useState(false);
 
   if (!startMenuOpen) return null;
 
@@ -145,51 +140,14 @@ export function StartMenu() {
             {t.startMenu.directorInspector}
           </span>
           <span
-            className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium ${
-              directorOpen
+            className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium ${directorOpen
                 ? 'bg-[#2a3950] text-[#7cc4f5]'
                 : 'bg-[#262b35] text-slate-400'
-            }`}
+              }`}
           >
             {directorOpen ? t.startMenu.on : t.startMenu.off}
           </span>
         </button>
-
-        {!confirmReset ? (
-          <button
-            type="button"
-            onClick={() => setConfirmReset(true)}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-rose-300 hover:bg-[#332227] cursor-pointer"
-          >
-            <RotateCcw className="h-4 w-4" />
-            {t.startMenu.resetProgress}
-          </button>
-        ) : (
-          <div className="mx-2 my-1 flex items-center justify-between gap-2 border border-rose-500/40 bg-[#2d1c21] px-2.5 py-1.5">
-            <span className="text-[11px] text-rose-200">
-              {t.startMenu.restartPrompt}
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setConfirmReset(false)}
-                className="rounded-[2px] px-2 py-0.5 text-[11px] text-slate-300 hover:bg-[#3a3f4b] cursor-pointer"
-              >
-                {t.startMenu.cancel}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmReset(false);
-                  void resetProgress({ returnToSetup: true });
-                }}
-                className="rounded-[2px] bg-[#d93025] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[#e53935] cursor-pointer"
-              >
-                {t.startMenu.reset}
-              </button>
-            </div>
-          </div>
-        )}
 
         {authEnabled && (
           <button

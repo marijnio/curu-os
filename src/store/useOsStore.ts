@@ -431,6 +431,7 @@ export interface OsState {
   compilerWarnings: string[];
   playerVariables: Record<string, string>;
   templateVars: Record<string, string>;
+  savedProgressVersion: number;
 
   // Desktop / Windows
   windows: Record<AppId, WindowState>;
@@ -492,6 +493,7 @@ export interface OsState {
     opts?: { forceReset?: boolean; playerVariables?: Record<string, string> }
   ) => Promise<void>;
   resetProgress: (opts?: { returnToSetup?: boolean }) => Promise<void>;
+  clearScenarioProgress: (scenarioId: string) => void;
 
   // Window actions
   openApp: (appId: AppId) => void;
@@ -1681,6 +1683,7 @@ export const useOsStore = create<OsState>((set, get) => {
     compilerWarnings: [],
     playerVariables: {},
     templateVars: {},
+    savedProgressVersion: 0,
 
     windows: createDefaultWindows(),
     focusedApp: 'messages',
@@ -2071,6 +2074,18 @@ export const useOsStore = create<OsState>((set, get) => {
         forceReset: true,
         playerVariables: state.playerVariables,
       });
+    },
+
+    clearScenarioProgress: (scenarioId) => {
+      if (!scenarioId) return;
+      localStorage.removeItem(`${STORAGE_PREFIX}${scenarioId}`);
+      if (localStorage.getItem(ACTIVE_SCENARIO_KEY) === scenarioId) {
+        localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+      }
+      set((state) => ({
+        savedProgressVersion: state.savedProgressVersion + 1,
+        ...(state.scenarioId === scenarioId ? { playerVariables: {} } : {}),
+      }));
     },
 
     openApp: (appId) => {

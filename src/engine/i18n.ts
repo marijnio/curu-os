@@ -121,10 +121,6 @@ export interface UiTranslations {
     directorInspector: string;
     on: string;
     off: string;
-    resetProgress: string;
-    restartPrompt: string;
-    cancel: string;
-    reset: string;
     signOut: string;
   };
   taskbar: {
@@ -186,11 +182,13 @@ export interface UiTranslations {
     savedSessionAvailable: string;
     signedInAsPrefix: string;
     resumeSession: string;
-    startFresh: string;
+    resetProgress: string;
+    resetConfirmPrompt: string;
+    cancel: string;
+    reset: string;
     required: string;
     launching: string;
     startScenario: string;
-    backToResume: string;
     loadingScenario: string;
   };
 }
@@ -327,10 +325,6 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       directorInspector: 'Director / Debug Inspector',
       on: 'ON',
       off: 'OFF',
-      resetProgress: 'Reset Progress',
-      restartPrompt: 'Restart scenario?',
-      cancel: 'Cancel',
-      reset: 'Reset',
       signOut: 'Sign Out',
     },
     taskbar: {
@@ -394,11 +388,13 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       savedSessionAvailable: 'Saved Session Available',
       signedInAsPrefix: 'Signed in as',
       resumeSession: 'Resume Session',
-      startFresh: 'Start Fresh',
+      resetProgress: 'Reset Progress',
+      resetConfirmPrompt: 'Reset progress for this scenario?',
+      cancel: 'Cancel',
+      reset: 'Reset',
       required: 'Required',
       launching: 'Launching...',
       startScenario: 'Start Scenario',
-      backToResume: 'Back to Resume',
       loadingScenario: 'Loading scenario...',
     },
   },
@@ -534,10 +530,6 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       directorInspector: 'Director / Debug Inspector',
       on: 'AAN',
       off: 'UIT',
-      resetProgress: 'Voortgang resetten',
-      restartPrompt: 'Scenario herstarten?',
-      cancel: 'Annuleren',
-      reset: 'Resetten',
       signOut: 'Uitloggen',
     },
     taskbar: {
@@ -601,11 +593,13 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       savedSessionAvailable: 'Opgeslagen sessie beschikbaar',
       signedInAsPrefix: 'Ingelogd als',
       resumeSession: 'Sessie hervatten',
-      startFresh: 'Opnieuw beginnen',
+      resetProgress: 'Voortgang resetten',
+      resetConfirmPrompt: 'Voortgang van dit scenario resetten?',
+      cancel: 'Annuleren',
+      reset: 'Resetten',
       required: 'Verplicht',
       launching: 'Starten...',
       startScenario: 'Scenario starten',
-      backToResume: 'Terug naar hervatten',
       loadingScenario: 'Scenario laden...',
     },
   },
