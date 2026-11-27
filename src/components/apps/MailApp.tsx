@@ -1,4 +1,14 @@
-import { Flag, Inbox, MailOpen, Paperclip, Reply, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Flag,
+  Inbox,
+  MailOpen,
+  Paperclip,
+  Reply,
+  CheckCircle2,
+  Search,
+  X,
+} from 'lucide-react';
 import { useOsStore } from '../../store/useOsStore';
 import { AttachmentCard } from '../shared/AttachmentCard';
 
@@ -12,12 +22,35 @@ export function MailApp() {
   const toggleEmailFlag = useOsStore((s) => s.toggleEmailFlag);
   const selectChoice = useOsStore((s) => s.selectChoice);
 
-  const sortedEmails = [...emails].reverse();
-  const activeEmail =
-    emails.find((e) => e.id === activeEmailId) ?? sortedEmails[0] ?? null;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'unread' | 'flagged'>('all');
 
   const getContact = (senderId: string) =>
     contacts.find((c) => c.id === senderId);
+
+  const sortedEmails = [...emails].reverse();
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredEmails = sortedEmails.filter((email) => {
+    if (filterMode === 'unread' && email.read) return false;
+    if (filterMode === 'flagged' && !email.flagged) return false;
+    if (!normalizedQuery) return true;
+
+    const sender = getContact(email.senderId);
+    const haystack = [
+      email.subject,
+      email.body.join(' '),
+      sender?.name ?? '',
+      sender?.email ?? '',
+      email.senderId,
+      email.attachments.join(' '),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(normalizedQuery);
+  });
+
+  const activeEmail =
+    emails.find((e) => e.id === activeEmailId) ?? filteredEmails[0] ?? null;
 
   const emailChoices = activeEmail
     ? activeChoices.filter(
@@ -43,13 +76,55 @@ export function MailApp() {
           )}
         </div>
 
+        {/* Search & Filter Controls */}
+        <div className="border-b border-slate-200 bg-white px-2.5 py-2 space-y-2">
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search mail..."
+              className="w-full rounded border border-slate-200 bg-[#f8f9fa] py-1 pr-6 pl-7 text-[11px] text-slate-800 outline-none focus:border-[#0067c0] focus:bg-white"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear mail search"
+                className="absolute right-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {(['all', 'unread', 'flagged'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setFilterMode(mode)}
+                className={`rounded px-2 py-0.5 text-[10px] font-medium capitalize transition cursor-pointer ${
+                  filterMode === mode
+                    ? 'bg-[#0067c0] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto divide-y divide-slate-200/80">
-          {sortedEmails.length === 0 ? (
+          {filteredEmails.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400">
-              Your inbox is currently empty.
+              {sortedEmails.length === 0
+                ? 'Your inbox is currently empty.'
+                : 'No emails match your filter.'}
             </div>
           ) : (
-            sortedEmails.map((email) => {
+            filteredEmails.map((email) => {
               const sender = getContact(email.senderId);
               const isSelected = activeEmail?.id === email.id;
 

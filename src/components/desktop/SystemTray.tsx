@@ -4,7 +4,7 @@ import { useOsStore } from '../../store/useOsStore';
 
 export function SystemTray() {
   const clockMinutes = useOsStore((s) => s.clockMinutes);
-  const manifest = useOsStore((s) => s.manifest);
+  const dayLabel = useOsStore((s) => s.dayLabel);
   const muted = useOsStore((s) => s.muted);
   const toggleMuted = useOsStore((s) => s.toggleMuted);
   const notifications = useOsStore((s) => s.notifications);
@@ -54,7 +54,7 @@ export function SystemTray() {
           e.stopPropagation();
           toggleNotifications();
         }}
-        title={manifest?.dayLabel ? `${timeOfDay} · ${manifest.dayLabel}` : timeOfDay}
+        title={dayLabel ? `${timeOfDay} · ${dayLabel}` : timeOfDay}
         className="flex h-10 items-center gap-2.5 px-3 text-xs text-white transition-colors hover:bg-[#22262e]"
       >
         <span className="hidden sm:inline text-[11px] font-normal text-slate-300">
@@ -72,9 +72,9 @@ export function SystemTray() {
           <div className="flex items-center justify-between border-b border-[#2c313b] bg-[#14171c] px-3.5 py-2.5">
             <div className="text-xs font-semibold text-slate-200">
               Notifications
-              {manifest?.dayLabel && (
+              {dayLabel && (
                 <span className="ml-2 font-normal text-slate-400">
-                  {manifest.dayLabel}
+                  {dayLabel}
                 </span>
               )}
             </div>

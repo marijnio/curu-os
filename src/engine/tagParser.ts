@@ -1,4 +1,4 @@
-import type { Channel } from '../types/narrative';
+import type { Channel, EventHookType } from '../types/narrative';
 import type { FileKind, FolderName } from '../types/scenario';
 
 export interface ParsedVoiceNoteTag {
@@ -14,10 +14,15 @@ export interface ParsedFileUnlockTag {
 }
 
 export interface ParsedEventHookTag {
-  event: 'on_file_open';
-  targetPath: string;
+  event: EventHookType;
+  target: string;
   resumeMode: 'continue' | 'knot';
   targetKnot?: string;
+}
+
+export interface ParsedContactStatusTag {
+  contactId: string;
+  status: 'online' | 'away' | 'offline';
 }
 
 export interface ParsedTagBundle {
@@ -28,6 +33,10 @@ export interface ParsedTagBundle {
   attachments: string[];
   fileUnlocks: ParsedFileUnlockTag[];
   advanceMinutes: number;
+  setTimeMinutes?: number;
+  setDayLabel?: string;
+  contactUnlocks: string[];
+  contactStatuses: ParsedContactStatusTag[];
   eventHooks: ParsedEventHookTag[];
   flagEmail: boolean;
   typingDelayMs?: number;
@@ -120,6 +129,8 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
     attachments: [],
     fileUnlocks: [],
     advanceMinutes: 0,
+    contactUnlocks: [],
+    contactStatuses: [],
     eventHooks: [],
     flagEmail: false,
     silent: false,
@@ -127,7 +138,7 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
   };
 
   for (const raw of rawTags) {
-    const trimmed = raw.trim();
+    const trimmed = raw.trim().replace(/\\\|/g, '|');
     if (!trimmed) continue;
 
     const bareUpper = trimmed.toUpperCase();
@@ -211,18 +222,73 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
         }
         break;
       }
+      case 'SET_TIME': {
+        const match = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(value);
+        if (!match) {
+          bundle.unknownTags.push(trimmed);
+          break;
+        }
+        const hours = Number(match[1]);
+        const mins = Number(match[2]);
+        if (hours < 0 || hours > 23 || mins < 0 || mins > 59) {
+          bundle.unknownTags.push(trimmed);
+          break;
+        }
+        bundle.setTimeMinutes = hours * 60 + mins;
+        break;
+      }
+      case 'SET_DAY': {
+        if (value) {
+          bundle.setDayLabel = value;
+        }
+        break;
+      }
+      case 'CONTACT_UNLOCK': {
+        if (value) {
+          bundle.contactUnlocks.push(value);
+        }
+        break;
+      }
+      case 'CONTACT_STATUS': {
+        const rawStatus = (parts[1] ?? '').trim().toLowerCase();
+        const statusValue = rawStatus.startsWith('status:')
+          ? rawStatus.slice('status:'.length).trim()
+          : rawStatus;
+        if (
+          value &&
+          (statusValue === 'online' ||
+            statusValue === 'away' ||
+            statusValue === 'offline')
+        ) {
+          bundle.contactStatuses.push({
+            contactId: value,
+            status: statusValue,
+          });
+        } else {
+          bundle.unknownTags.push(trimmed);
+        }
+        break;
+      }
       case 'EVENT_HOOK': {
         // Supports:
-        // on_file_open:<path>
-        // on_file_open:<path> => <knot>  (recommended in .ink since -> is an Ink divert)
-        // on_file_open:<path> -> <knot>
-        const hookMatch = /^on_file_open:(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(value);
+        // on_file_open:<path> [=> <knot>]
+        // on_audio_play:<path> [=> <knot>]
+        // on_email_read:<sender_or_subject> [=> <knot>]
+        const hookMatch =
+          /^(on_file_open|on_audio_play|on_email_read):(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
+            value
+          );
         if (hookMatch) {
-          const targetPath = normalizeScenarioPath(hookMatch[1]);
-          const targetKnot = hookMatch[2]?.trim();
+          const event = hookMatch[1].toLowerCase() as EventHookType;
+          const rawTarget = hookMatch[2].trim();
+          const target =
+            event === 'on_email_read'
+              ? rawTarget
+              : normalizeScenarioPath(rawTarget);
+          const targetKnot = hookMatch[3]?.trim();
           bundle.eventHooks.push({
-            event: 'on_file_open',
-            targetPath,
+            event,
+            target,
             resumeMode: targetKnot ? 'knot' : 'continue',
             targetKnot,
           });

@@ -7,6 +7,7 @@ import {
   Mail,
   MessageSquare,
   RotateCcw,
+  StickyNote,
   X,
 } from 'lucide-react';
 import type { AppId } from '../../types/os';
@@ -19,6 +20,7 @@ import { StartMenu } from './StartMenu';
 import { MessagesApp } from '../apps/MessagesApp';
 import { MailApp } from '../apps/MailApp';
 import { FileExplorerApp } from '../apps/FileExplorerApp';
+import { NotesApp } from '../apps/NotesApp';
 import { DirectorInspector } from '../apps/DirectorInspector';
 
 export function Desktop() {
@@ -127,6 +129,17 @@ export function Desktop() {
           onSelect={() => setSelectedIcon('explorer')}
           onOpen={() => openApp('explorer')}
         />
+        <DesktopIcon
+          label="Notes"
+          icon={
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#d97706] shadow-sm">
+              <StickyNote className="h-5 w-5 text-white" />
+            </div>
+          }
+          selected={selectedIcon === 'notes'}
+          onSelect={() => setSelectedIcon('notes')}
+          onOpen={() => openApp('notes')}
+        />
       </div>
 
       {/* Loading / Error State */}
@@ -181,6 +194,13 @@ export function Desktop() {
         icon={<Folder className="h-3.5 w-3.5 fill-[#eab308] text-[#ca8a04]" />}
       >
         <FileExplorerApp />
+      </Window>
+
+      <Window
+        windowState={windows.notes}
+        icon={<StickyNote className="h-3.5 w-3.5 text-[#d97706]" />}
+      >
+        <NotesApp />
       </Window>
 
       <Window

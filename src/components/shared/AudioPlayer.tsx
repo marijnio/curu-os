@@ -148,6 +148,7 @@ export function AudioPlayer({
       } else {
         sim.play();
         setIsPlaying(true);
+        useOsStore.getState().onAudioPlayed(path);
       }
       return;
     }
@@ -164,11 +165,13 @@ export function AudioPlayer({
     try {
       await audio.play();
       setIsPlaying(true);
+      useOsStore.getState().onAudioPlayed(path);
     } catch {
       setUseFallback(true);
       const sim = ensureSim();
       sim.play();
       setIsPlaying(true);
+      useOsStore.getState().onAudioPlayed(path);
     }
   };
 

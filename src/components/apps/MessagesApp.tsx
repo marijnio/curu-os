@@ -6,6 +6,7 @@ import { AttachmentCard } from '../shared/AttachmentCard';
 
 export function MessagesApp() {
   const contacts = useOsStore((s) => s.contacts);
+  const unlockedContactIds = useOsStore((s) => s.unlockedContactIds);
   const activeContactId = useOsStore((s) => s.activeContactId);
   const chatMessages = useOsStore((s) => s.chatMessages);
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
@@ -19,11 +20,16 @@ export function MessagesApp() {
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
-  const pinnedContacts = contacts.filter((c) => c.pinned);
-  const regularContacts = contacts.filter((c) => !c.pinned);
+  const visibleContacts = contacts.filter(
+    (c) => !c.hiddenByDefault || unlockedContactIds.includes(c.id)
+  );
+  const pinnedContacts = visibleContacts.filter((c) => c.pinned);
+  const regularContacts = visibleContacts.filter((c) => !c.pinned);
 
   const activeContact =
-    contacts.find((c) => c.id === activeContactId) ?? contacts[0] ?? null;
+    visibleContacts.find((c) => c.id === activeContactId) ??
+    visibleContacts[0] ??
+    null;
 
   const threadMessages = activeContact
     ? chatMessages.filter((m) => m.contactId === activeContact.id)
@@ -267,7 +273,11 @@ export function MessagesApp() {
                     {isTyping
                       ? `${activeContact.name} is typing...`
                       : pendingHooks.length > 0
-                        ? 'Open the shared file in File Explorer to continue.'
+                        ? pendingHooks[0].event === 'on_audio_play'
+                          ? 'Listen to the voice note to continue.'
+                          : pendingHooks[0].event === 'on_email_read'
+                            ? 'Open and read the incoming email in Mail to continue.'
+                            : 'Open the shared file in File Explorer to continue.'
                         : activeChoices.some((c) => c.channel === 'email')
                           ? 'A reply is waiting in Mail.'
                           : activeChoices.length > 0

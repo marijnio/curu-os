@@ -1,4 +1,4 @@
-import { Bug, Folder, Mail, MessageSquare } from 'lucide-react';
+import { Bug, Folder, Mail, MessageSquare, StickyNote } from 'lucide-react';
 import type { AppId } from '../../types/os';
 import { useOsStore } from '../../store/useOsStore';
 import { SystemTray } from './SystemTray';
@@ -10,6 +10,7 @@ const TASKBAR_APPS: Array<{
   { id: 'messages', label: 'Messages' },
   { id: 'mail', label: 'Mail' },
   { id: 'explorer', label: 'File Explorer' },
+  { id: 'notes', label: 'Notes' },
 ];
 
 export function Taskbar() {
@@ -35,6 +36,7 @@ export function Taskbar() {
     messages: totalChatUnread,
     mail: totalMailUnread,
     explorer: totalFilesUnread,
+    notes: 0,
     director: 0,
   };
 
@@ -46,6 +48,8 @@ export function Taskbar() {
         return <Mail className="h-4 w-4 text-[#4ca3dd]" />;
       case 'explorer':
         return <Folder className="h-4 w-4 fill-[#eab308] text-[#ca8a04]" />;
+      case 'notes':
+        return <StickyNote className="h-4 w-4 text-[#f59e0b]" />;
       case 'director':
         return <Bug className="h-4 w-4 text-slate-300" />;
     }

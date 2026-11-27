@@ -12,6 +12,7 @@ export interface Contact {
   avatarInitials: string;
   pinned?: boolean;
   status?: 'online' | 'away' | 'offline';
+  hiddenByDefault?: boolean;
 }
 
 export type FolderName = 'Documents' | 'Images' | 'Voice Notes' | 'Downloads';

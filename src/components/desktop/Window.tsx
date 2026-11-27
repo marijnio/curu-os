@@ -9,6 +9,26 @@ interface WindowProps {
   children: ReactNode;
 }
 
+type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+const MIN_WIDTH = 420;
+const MIN_HEIGHT = 320;
+const TASKBAR_HEIGHT = 40;
+
+const RESIZE_HANDLES: Array<{
+  dir: ResizeDirection;
+  className: string;
+}> = [
+  { dir: 'n', className: 'top-0 left-2 right-2 h-1.5 cursor-ns-resize' },
+  { dir: 's', className: 'bottom-0 left-2 right-2 h-1.5 cursor-ns-resize' },
+  { dir: 'e', className: 'top-2 bottom-2 right-0 w-1.5 cursor-ew-resize' },
+  { dir: 'w', className: 'top-2 bottom-2 left-0 w-1.5 cursor-ew-resize' },
+  { dir: 'nw', className: 'top-0 left-0 h-2.5 w-2.5 cursor-nwse-resize' },
+  { dir: 'ne', className: 'top-0 right-0 h-2.5 w-2.5 cursor-nesw-resize' },
+  { dir: 'sw', className: 'bottom-0 left-0 h-2.5 w-2.5 cursor-nesw-resize' },
+  { dir: 'se', className: 'bottom-0 right-0 h-2.5 w-2.5 cursor-nwse-resize' },
+];
+
 export function Window({ windowState, icon, children }: WindowProps) {
   const focusedApp = useOsStore((s) => s.focusedApp);
   const focusApp = useOsStore((s) => s.focusApp);
@@ -16,12 +36,23 @@ export function Window({ windowState, icon, children }: WindowProps) {
   const minimizeApp = useOsStore((s) => s.minimizeApp);
   const toggleMaximizeApp = useOsStore((s) => s.toggleMaximizeApp);
   const moveWindow = useOsStore((s) => s.moveWindow);
+  const resizeWindow = useOsStore((s) => s.resizeWindow);
 
   const dragStartRef = useRef<{
     pointerX: number;
     pointerY: number;
     originX: number;
     originY: number;
+  } | null>(null);
+
+  const resizeStartRef = useRef<{
+    dir: ResizeDirection;
+    pointerX: number;
+    pointerY: number;
+    originX: number;
+    originY: number;
+    originWidth: number;
+    originHeight: number;
   } | null>(null);
 
   if (!windowState.isOpen || windowState.isMinimized) {
@@ -76,19 +107,95 @@ export function Window({ windowState, icon, children }: WindowProps) {
     }
   };
 
+  const handleResizePointerDown = (
+    dir: ResizeDirection,
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (e.button !== 0 || windowState.isMaximized) return;
+    e.stopPropagation();
+    focusApp(windowState.id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    resizeStartRef.current = {
+      dir,
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      originX: windowState.position.x,
+      originY: windowState.position.y,
+      originWidth: windowState.size.width,
+      originHeight: windowState.size.height,
+    };
+  };
+
+  const handleResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = resizeStartRef.current;
+    if (!start || windowState.isMaximized) return;
+
+    const dx = e.clientX - start.pointerX;
+    const dy = e.clientY - start.pointerY;
+
+    const maxViewportW = Math.max(MIN_WIDTH, window.innerWidth - 16);
+    const maxViewportH = Math.max(MIN_HEIGHT, window.innerHeight - TASKBAR_HEIGHT - 8);
+
+    let nextX = start.originX;
+    let nextY = start.originY;
+    let nextW = start.originWidth;
+    let nextH = start.originHeight;
+
+    if (start.dir.includes('e')) {
+      nextW = Math.max(MIN_WIDTH, Math.min(maxViewportW, start.originWidth + dx));
+    }
+    if (start.dir.includes('s')) {
+      nextH = Math.max(MIN_HEIGHT, Math.min(maxViewportH, start.originHeight + dy));
+    }
+    if (start.dir.includes('w')) {
+      const clampedW = Math.max(
+        MIN_WIDTH,
+        Math.min(maxViewportW, start.originWidth - dx)
+      );
+      nextX = start.originX + (start.originWidth - clampedW);
+      nextW = clampedW;
+    }
+    if (start.dir.includes('n')) {
+      const maxTopDelta = start.originY;
+      const clampedDelta = Math.max(-maxTopDelta, dy);
+      const clampedH = Math.max(
+        MIN_HEIGHT,
+        Math.min(maxViewportH, start.originHeight - clampedDelta)
+      );
+      nextY = Math.max(0, start.originY + (start.originHeight - clampedH));
+      nextH = clampedH;
+    }
+
+    resizeWindow(
+      windowState.id,
+      { width: Math.round(nextW), height: Math.round(nextH) },
+      { x: Math.round(nextX), y: Math.round(nextY) }
+    );
+  };
+
+  const handleResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (resizeStartRef.current) {
+      resizeStartRef.current = null;
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    }
+  };
+
   const style: React.CSSProperties = windowState.isMaximized
     ? {
         top: 0,
         left: 0,
         right: 0,
-        bottom: 40,
+        bottom: TASKBAR_HEIGHT,
         zIndex: windowState.zIndex,
       }
     : {
         left: windowState.position.x,
         top: windowState.position.y,
-        width: `min(${windowState.size.width}px, calc(100vw - 24px))`,
-        height: `min(${windowState.size.height}px, calc(100vh - 56px))`,
+        width: `min(${windowState.size.width}px, calc(100vw - 16px))`,
+        height: `min(${windowState.size.height}px, calc(100vh - ${TASKBAR_HEIGHT + 8}px))`,
         zIndex: windowState.zIndex,
       };
 
@@ -110,9 +217,7 @@ export function Window({ windowState, icon, children }: WindowProps) {
             toggleMaximizeApp(windowState.id);
           }
         }}
-        className={`flex h-8 shrink-0 items-center justify-between border-b border-slate-200 pl-2.5 select-none ${
-          windowState.isMaximized ? 'cursor-default' : 'cursor-default'
-        } ${
+        className={`flex h-8 shrink-0 items-center justify-between border-b border-slate-200 pl-2.5 select-none cursor-default ${
           isFocused
             ? 'bg-white text-slate-800'
             : 'bg-[#f1f3f5] text-slate-500'
@@ -159,6 +264,18 @@ export function Window({ windowState, icon, children }: WindowProps) {
       <div className="flex-1 min-h-0 overflow-hidden bg-white">
         {children}
       </div>
+
+      {/* 8-way Resize Handles */}
+      {!windowState.isMaximized &&
+        RESIZE_HANDLES.map((handle) => (
+          <div
+            key={handle.dir}
+            onPointerDown={(e) => handleResizePointerDown(handle.dir, e)}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+            className={`absolute z-20 ${handle.className}`}
+          />
+        ))}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Curu-OS
 
-**Curu-OS** is a browser-based narrative simulation engine disguised as an everyday workplace desktop environment. Stories run through diegetic workplace tools — **Messages**, **Mail**, and **File Explorer** — powered by **Ink (`inkjs`)**, **Markdown**, **images**, and **audio**.
+**Curu-OS** is a browser-based narrative simulation engine disguised as an everyday workplace desktop environment. Stories run through diegetic workplace tools — **Messages**, **Mail**, **File Explorer**, and **Notes** (resizable multi-window desktop with search, notification chimes, and autosave) — powered by **Ink (`inkjs`)**, **Markdown**, **images**, and **audio**.
 
 ## Tech Stack
 
@@ -19,7 +19,7 @@ npm run dev
 
 - Edit scenario files under `public/scenarios/<id>/` (e.g. `story.ink`, `scenario.json`, `docs/*.md`).
 - Vite automatically compiles `.ink` files on startup and live-reloads on changes.
-- Press **`Ctrl + Shift + D`** (or **`Cmd + Shift + D`**) or open **Curu-OS → Director / Debug Inspector** to inspect Ink variables, active choices, pending file hooks, and event logs.
+- Press **`Ctrl + Shift + D`** (or **`Cmd + Shift + D`**) or open **Curu-OS → Director / Debug Inspector** to inspect/edit Ink variables, jump directly to any Ink knot, manage save checkpoints (plus JSON export/import), trigger pending hooks, and view event logs.
 
 ### Useful Scripts
 

@@ -85,6 +85,7 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
 - `contacts[].id`: Must match `# SENDER: <contact_id>` tags in `story.ink`.
 - `contacts[].pinned`: Set `true` on `"system_guide"` to keep it pinned at the top of Messages.
 - `contacts[].status`: `"online" | "away" | "offline"`.
+- `contacts[].hiddenByDefault`: Set `true` to hide a contact in Messages until unlocked via `# CONTACT_UNLOCK: <id>` or an incoming message.
 - `files[].folder`: `"Documents" | "Images" | "Voice Notes" | "Downloads"`.
 - `files[].kind`: `"markdown" | "image" | "audio" | "text"`.
 - `files[].unlockedByDefault`: Set `true` for starting workspace files; otherwise leave `false` and unlock dynamically with `# ATTACHMENT`, `# VOICE_NOTE`, or `# FILE_UNLOCK`.
@@ -104,11 +105,19 @@ Curu-OS interprets Ink `#` tags attached to story lines and choices as desktop O
 | `# ATTACHMENT: <path>` | Attaches a clickable file card to the current chat message or email and registers it in File Explorer (`Unified Media Routing`). |
 | `# FILE_UNLOCK: <path>` | Unlocks a file directly in File Explorer (optional `\| folder: Documents \| name: Custom.md`). |
 | `# ADVANCE_TIME: <minutes>` | Advances the in-world taskbar clock by `<minutes>` integer minutes. |
-| `# EVENT_HOOK: on_file_open:<path> => <knot>` | Registers a reactive hook that jumps to `<knot>` as soon as the player opens `<path>` in File Explorer. Use `=>` (not `->`) in `.ink` files so Ink does not parse `->` as an immediate divert. |
-| `# EVENT_HOOK: on_file_open:<path>` | Pauses Ink execution immediately after the current line and resumes `Continue()` once `<path>` is opened. |
+| `# SET_TIME: <HH:MM>` | Sets the in-world taskbar clock directly to 24-hour `<HH:MM>` (e.g., `14:30`). |
+| `# SET_DAY: <label>` | Updates the current day/phase label shown in the System Tray and Notifications header (e.g., `Phase 2 · Escalation`). |
+| `# CONTACT_UNLOCK: <contact_id>` | Reveals a contact marked `hiddenByDefault: true` in Messages. |
+| `# CONTACT_STATUS: <contact_id> \| online\|away\|offline` | Updates a contact's presence indicator in Messages (escape `\|` as `\\|` in `.ink` source). |
+| `# EVENT_HOOK: on_file_open:<path> => <knot>` | Fires when `<path>` is opened in File Explorer (`=> <knot>` jumps to `<knot>`; omit `=> <knot>` to pause and resume `Continue()`). Use `=>` instead of `->` in `.ink` files. |
+| `# EVENT_HOOK: on_audio_play:<path> [=> <knot>]` | Fires when `<path>` starts playing in Messages or File Explorer (works with both real audio and simulated fallback). |
+| `# EVENT_HOOK: on_email_read:<matcher> [=> <knot>]` | Fires when a matching email is opened in Mail (`sender:<id>`, `subject:<text>`, or bare `<id_or_subject>`). |
 | `# FLAG_EMAIL` | Marks the active email as flagged in Mail. |
 | `# TYPING_DELAY: <ms>` | Overrides typing indicator duration in ms for the current chat line. |
 | `# SILENT` | Placed on an Ink choice to avoid echoing the choice text as an outgoing player chat bubble. |
+
+### Multi-File Ink Scripts (`INCLUDE`)
+Large scenarios can split their narrative across multiple `.ink` files inside the scenario folder using `INCLUDE chapters/phase2.ink` in `story.ink` (supported by both the CLI compiler and browser live-compilation).
 
 ---
 

@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   Maximize2,
   Mic,
+  Search,
   X,
   File,
   LayoutGrid,
@@ -38,6 +39,7 @@ export function FileExplorerApp() {
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [modalOpen, setModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filesInFolder = (folder: FolderName): VirtualFile[] => {
     if (folder === 'Downloads') {
@@ -46,7 +48,21 @@ export function FileExplorerApp() {
     return files.filter((f) => f.folder === folder);
   };
 
-  const visibleFiles = filesInFolder(selectedFolder);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = normalizedQuery.length > 0;
+  const visibleFiles = isSearching
+    ? files.filter((f) => {
+        const haystack = [
+          f.name,
+          f.path,
+          f.folder,
+          f.transcript ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
+    : filesInFolder(selectedFolder);
   const selectedFile =
     files.find((f) => f.id === selectedFileId) ?? visibleFiles[0] ?? null;
 
@@ -137,7 +153,29 @@ export function FileExplorerApp() {
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2 h-3 w-3 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search all files..."
+              className="w-44 rounded border border-slate-200 bg-white py-0.5 pr-6 pl-6 text-[11px] text-slate-800 outline-none focus:border-[#0067c0]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear file search"
+                className="absolute right-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setViewMode('list')}
@@ -161,7 +199,8 @@ export function FileExplorerApp() {
             }`}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -206,10 +245,15 @@ export function FileExplorerApp() {
 
         {/* Center Pane: File List / Grid */}
         <section className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+          {isSearching && (
+            <div className="border-b border-slate-200 bg-[#f4f8fd] px-3 py-1.5 text-[10px] font-medium text-[#005aa8]">
+              Searching all folders ({visibleFiles.length})
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto p-2">
             {visibleFiles.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-400">
-                This folder is empty.
+                {isSearching ? 'No matching files found.' : 'This folder is empty.'}
               </div>
             ) : viewMode === 'list' ? (
               <div className="space-y-0.5">

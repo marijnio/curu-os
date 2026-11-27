@@ -1,7 +1,14 @@
 import type { Channel } from './narrative';
 import type { FileCatalogEntry } from './scenario';
 
-export type AppId = 'messages' | 'mail' | 'explorer' | 'director';
+export type AppId = 'messages' | 'mail' | 'explorer' | 'notes' | 'director';
+
+export interface NoteItem {
+  id: string;
+  title: string;
+  content: string;
+  updatedAt: string;
+}
 
 export interface WindowState {
   id: AppId;

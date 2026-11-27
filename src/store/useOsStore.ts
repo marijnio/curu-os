@@ -7,9 +7,11 @@ import type {
   DebugLogEntry,
   EmailMessage,
   EventHook,
+  EventHookType,
 } from '../types/narrative';
 import type {
   AppId,
+  NoteItem,
   ToastNotification,
   VirtualFile,
   WindowState,
@@ -20,6 +22,7 @@ import {
   loadScenarioBundle,
   type ScenarioSummary,
 } from '../engine/scenarioLoader';
+import { playNotificationChime } from '../engine/soundEffects';
 import {
   formatClock24,
   inferFileMeta,
@@ -28,8 +31,9 @@ import {
   parseInkTags,
 } from '../engine/tagParser';
 
-const STORAGE_PREFIX = 'curu-os:v1:';
-const ACTIVE_SCENARIO_KEY = 'curu-os:v1:active-scenario';
+const STORAGE_PREFIX = 'curu-os:v2:';
+const ACTIVE_SCENARIO_KEY = 'curu-os:v2:active-scenario';
+const CHECKPOINTS_PREFIX = 'curu-os:v2:checkpoints:';
 
 let storyInstance: Story | null = null;
 let sessionToken = 0;
@@ -39,6 +43,10 @@ let pausedByContinueHook = false;
 
 type DispatchBeat =
   | { kind: 'advance_time'; minutes: number }
+  | { kind: 'set_time'; minutes: number }
+  | { kind: 'set_day'; dayLabel: string }
+  | { kind: 'contact_unlock'; contactId: string }
+  | { kind: 'contact_status'; contactId: string; status: 'online' | 'away' | 'offline' }
   | {
       kind: 'unlock_file';
       path: string;
@@ -61,9 +69,12 @@ type DispatchBeat =
 
 const dispatchQueue: DispatchBeat[] = [];
 
-interface PersistedSnapshot {
+export interface PersistedSnapshot {
   inkStateJson: string;
   clockMinutes: number;
+  dayLabel: string;
+  contacts: Contact[];
+  unlockedContactIds: string[];
   activeChannel: Channel;
   activeSenderId: string;
   activeEmailDraftId: string | null;
@@ -71,9 +82,19 @@ interface PersistedSnapshot {
   unreadChatCounts: Record<string, number>;
   emails: EmailMessage[];
   files: VirtualFile[];
+  notes: NoteItem[];
   activeChoices: ActiveChoice[];
   pendingHooks: EventHook[];
   pausedByContinueHook: boolean;
+}
+
+export interface CheckpointRecord {
+  id: string;
+  name: string;
+  savedAt: string;
+  clockStr: string;
+  dayLabel: string;
+  snapshot: PersistedSnapshot;
 }
 
 function makeId(prefix: string): string {
@@ -112,6 +133,16 @@ function createDefaultWindows(): Record<AppId, WindowState> {
       position: { x: 204, y: 84 },
       size: { width: 900, height: 560 },
     },
+    notes: {
+      id: 'notes',
+      title: 'Notes',
+      isOpen: false,
+      isMinimized: false,
+      isMaximized: false,
+      zIndex: 11,
+      position: { x: 260, y: 96 },
+      size: { width: 680, height: 480 },
+    },
     director: {
       id: 'director',
       title: 'Director Inspector',
@@ -119,10 +150,67 @@ function createDefaultWindows(): Record<AppId, WindowState> {
       isMinimized: false,
       isMaximized: false,
       zIndex: 13,
-      position: { x: 320, y: 52 },
-      size: { width: 660, height: 500 },
+      position: { x: 300, y: 44 },
+      size: { width: 720, height: 540 },
     },
   };
+}
+
+function loadCheckpointsFromStorage(scenarioId: string): CheckpointRecord[] {
+  try {
+    const raw = localStorage.getItem(`${CHECKPOINTS_PREFIX}${scenarioId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CheckpointRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistCheckpointsToStorage(
+  scenarioId: string,
+  checkpoints: CheckpointRecord[]
+): void {
+  try {
+    localStorage.setItem(
+      `${CHECKPOINTS_PREFIX}${scenarioId}`,
+      JSON.stringify(checkpoints)
+    );
+  } catch {
+    // Ignore storage quota errors gracefully
+  }
+}
+
+function buildInitialFiles(manifest: ScenarioManifest, startTime: string): VirtualFile[] {
+  return manifest.files
+    .filter((f) => f.unlockedByDefault)
+    .map((entry) => {
+      const normalized = normalizeScenarioPath(entry.path);
+      return {
+        ...entry,
+        path: normalized,
+        id: normalized,
+        unlockedAt: startTime,
+        opened: false,
+      };
+    });
+}
+
+function matchesEmailHookTarget(email: EmailMessage, target: string): boolean {
+  const trimmed = target.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('sender:')) {
+    const expectedSender = lower.slice('sender:'.length).trim();
+    return email.senderId.toLowerCase() === expectedSender;
+  }
+  if (lower.startsWith('subject:')) {
+    const expectedSub = lower.slice('subject:'.length).trim();
+    return email.subject.toLowerCase().includes(expectedSub);
+  }
+  return (
+    email.senderId.toLowerCase() === lower ||
+    email.subject.toLowerCase().includes(lower)
+  );
 }
 
 export interface OsState {
@@ -146,11 +234,13 @@ export interface OsState {
   muted: boolean;
   instantTyping: boolean;
 
-  // In-world clock
+  // In-world clock & day/phase
   clockMinutes: number;
+  dayLabel: string;
 
   // Contacts & Messages
   contacts: Contact[];
+  unlockedContactIds: string[];
   activeContactId: string | null;
   chatMessages: ChatMessage[];
   unreadChatCounts: Record<string, number>;
@@ -165,6 +255,10 @@ export interface OsState {
   selectedFolder: FolderName;
   selectedFileId: string | null;
 
+  // Notes / Incident Log
+  notes: NoteItem[];
+  activeNoteId: string | null;
+
   // Narrative routing state
   activeChannel: Channel;
   activeSenderId: string;
@@ -172,6 +266,7 @@ export interface OsState {
   activeChoices: ActiveChoice[];
   pendingHooks: EventHook[];
   debugLogs: DebugLogEntry[];
+  checkpoints: CheckpointRecord[];
 
   // Actions
   initApp: () => Promise<void>;
@@ -185,6 +280,11 @@ export interface OsState {
   toggleMaximizeApp: (appId: AppId) => void;
   focusApp: (appId: AppId) => void;
   moveWindow: (appId: AppId, position: { x: number; y: number }) => void;
+  resizeWindow: (
+    appId: AppId,
+    size: { width: number; height: number },
+    position?: { x: number; y: number }
+  ) => void;
   toggleStartMenu: (open?: boolean) => void;
   toggleNotifications: (open?: boolean) => void;
   dismissToast: (id: string) => void;
@@ -201,26 +301,26 @@ export interface OsState {
   selectFile: (fileId: string) => void;
   openFileInExplorer: (filePath: string) => void;
   onFileOpened: (filePath: string) => void;
+  onAudioPlayed: (filePath: string) => void;
   selectChoice: (choiceIndex: number) => void;
   forceTriggerHook: (hookId: string) => void;
 
-  // Debug helper
-  getInkVariables: () => Array<{ name: string; value: string }>;
-}
+  // Notes actions
+  selectNote: (noteId: string) => void;
+  createNote: (title?: string) => void;
+  updateNote: (noteId: string, patch: { title?: string; content?: string }) => void;
+  deleteNote: (noteId: string) => void;
 
-function buildInitialFiles(manifest: ScenarioManifest, startTime: string): VirtualFile[] {
-  return manifest.files
-    .filter((f) => f.unlockedByDefault)
-    .map((entry) => {
-      const normalized = normalizeScenarioPath(entry.path);
-      return {
-        ...entry,
-        path: normalized,
-        id: normalized,
-        unlockedAt: startTime,
-        opened: false,
-      };
-    });
+  // Director & Checkpoint helpers
+  getInkVariables: () => Array<{ name: string; value: string }>;
+  getInkKnots: () => string[];
+  jumpToKnot: (knotName: string) => void;
+  setInkVariable: (name: string, rawValue: string) => void;
+  saveCheckpoint: (name?: string) => void;
+  restoreCheckpoint: (checkpointId: string) => boolean;
+  deleteCheckpoint: (checkpointId: string) => void;
+  exportSaveJson: () => string;
+  importSaveJson: (rawJson: string) => { ok: boolean; error?: string };
 }
 
 export const useOsStore = create<OsState>((set, get) => {
@@ -254,6 +354,12 @@ export const useOsStore = create<OsState>((set, get) => {
       read: false,
       actionTarget,
     };
+
+    if (!get().muted) {
+      playNotificationChime(
+        appId === 'mail' ? 'email' : appId === 'explorer' ? 'file' : 'chat'
+      );
+    }
 
     set((state) => ({
       notifications: [item, ...state.notifications].slice(0, 30),
@@ -331,24 +437,34 @@ export const useOsStore = create<OsState>((set, get) => {
     return created;
   }
 
+  function buildCurrentSnapshot(): PersistedSnapshot | null {
+    const state = get();
+    if (!storyInstance || !state.scenarioId) return null;
+    return {
+      inkStateJson: storyInstance.state.ToJson(),
+      clockMinutes: state.clockMinutes,
+      dayLabel: state.dayLabel,
+      contacts: state.contacts,
+      unlockedContactIds: state.unlockedContactIds,
+      activeChannel: state.activeChannel,
+      activeSenderId: state.activeSenderId,
+      activeEmailDraftId: state.activeEmailDraftId,
+      chatMessages: state.chatMessages,
+      unreadChatCounts: state.unreadChatCounts,
+      emails: state.emails,
+      files: state.files,
+      notes: state.notes,
+      activeChoices: state.activeChoices,
+      pendingHooks: state.pendingHooks,
+      pausedByContinueHook,
+    };
+  }
+
   function persistSnapshot() {
     const state = get();
-    if (!storyInstance || !state.scenarioId) return;
+    const snapshot = buildCurrentSnapshot();
+    if (!snapshot || !state.scenarioId) return;
     try {
-      const snapshot: PersistedSnapshot = {
-        inkStateJson: storyInstance.state.ToJson(),
-        clockMinutes: state.clockMinutes,
-        activeChannel: state.activeChannel,
-        activeSenderId: state.activeSenderId,
-        activeEmailDraftId: state.activeEmailDraftId,
-        chatMessages: state.chatMessages,
-        unreadChatCounts: state.unreadChatCounts,
-        emails: state.emails,
-        files: state.files,
-        activeChoices: state.activeChoices,
-        pendingHooks: state.pendingHooks,
-        pausedByContinueHook,
-      };
       localStorage.setItem(
         `${STORAGE_PREFIX}${state.scenarioId}`,
         JSON.stringify(snapshot)
@@ -357,6 +473,80 @@ export const useOsStore = create<OsState>((set, get) => {
     } catch {
       // Ignore storage quota errors gracefully
     }
+  }
+
+  function applySnapshot(saved: PersistedSnapshot, reason: string): boolean {
+    const manifest = get().manifest;
+    if (!storyInstance || !manifest) return false;
+
+    storyInstance.state.LoadJson(saved.inkStateJson);
+    sessionToken += 1;
+    dispatchQueue.length = 0;
+    queueRunning = false;
+    pausedByContinueHook = Boolean(saved.pausedByContinueHook);
+
+    const contacts = Array.isArray(saved.contacts) && saved.contacts.length > 0
+      ? saved.contacts
+      : manifest.contacts;
+    const unlockedContactIds = Array.isArray(saved.unlockedContactIds)
+      ? saved.unlockedContactIds
+      : contacts.filter((c) => !c.hiddenByDefault).map((c) => c.id);
+    const defaultContact =
+      contacts.find((c) => c.pinned && unlockedContactIds.includes(c.id))?.id ??
+      contacts.find((c) => unlockedContactIds.includes(c.id))?.id ??
+      contacts[0]?.id ??
+      null;
+    const notes =
+      Array.isArray(saved.notes) && saved.notes.length > 0
+        ? saved.notes
+        : [
+            {
+              id: 'note_default',
+              title: 'Shift Notes',
+              content: '',
+              updatedAt: formatClock24(saved.clockMinutes),
+            },
+          ];
+
+    set({
+      isLoading: false,
+      windows: createDefaultWindows(),
+      focusedApp: 'messages',
+      nextZIndex: 14,
+      toasts: [],
+      notifications: [],
+      typingContactId: null,
+      clockMinutes: saved.clockMinutes,
+      dayLabel: saved.dayLabel || manifest.dayLabel || 'Day 1',
+      contacts,
+      unlockedContactIds,
+      activeContactId: defaultContact,
+      chatMessages: saved.chatMessages,
+      unreadChatCounts: saved.unreadChatCounts ?? {},
+      emails: saved.emails,
+      activeEmailId: saved.emails[saved.emails.length - 1]?.id ?? null,
+      files: saved.files,
+      selectedFolder: 'Documents',
+      selectedFileId: saved.files[0]?.id ?? null,
+      notes,
+      activeNoteId: notes[0]?.id ?? null,
+      activeChannel: saved.activeChannel,
+      activeSenderId: saved.activeSenderId,
+      activeEmailDraftId: saved.activeEmailDraftId,
+      activeChoices: saved.activeChoices,
+      pendingHooks: saved.pendingHooks,
+      debugLogs: [
+        {
+          id: makeId('log'),
+          time: formatClock24(saved.clockMinutes),
+          type: 'checkpoint',
+          summary: reason,
+        },
+      ],
+    });
+
+    persistSnapshot();
+    return true;
   }
 
   function applyEmailLine(beat: Extract<DispatchBeat, { kind: 'email_line' }>) {
@@ -398,7 +588,8 @@ export const useOsStore = create<OsState>((set, get) => {
       }));
 
       const mailWin = state.windows.mail;
-      const mailVisible = mailWin.isOpen && !mailWin.isMinimized && state.focusedApp === 'mail';
+      const mailVisible =
+        mailWin.isOpen && !mailWin.isMinimized && state.focusedApp === 'mail';
       if (!mailVisible) {
         pushNotification('mail', `New Email from ${senderName}`, newEmail.subject, {
           emailId: newEmail.id,
@@ -434,6 +625,9 @@ export const useOsStore = create<OsState>((set, get) => {
 
     set((s) => ({
       typingContactId: null,
+      unlockedContactIds: s.unlockedContactIds.includes(msg.contactId)
+        ? s.unlockedContactIds
+        : [...s.unlockedContactIds, msg.contactId],
       chatMessages: [...s.chatMessages, msg],
       unreadChatCounts: isViewingThisThread
         ? s.unreadChatCounts
@@ -469,6 +663,30 @@ export const useOsStore = create<OsState>((set, get) => {
             set((s) => ({ clockMinutes: s.clockMinutes + beat.minutes }));
             break;
           }
+          case 'set_time': {
+            set({ clockMinutes: beat.minutes });
+            break;
+          }
+          case 'set_day': {
+            set({ dayLabel: beat.dayLabel });
+            break;
+          }
+          case 'contact_unlock': {
+            set((s) => ({
+              unlockedContactIds: s.unlockedContactIds.includes(beat.contactId)
+                ? s.unlockedContactIds
+                : [...s.unlockedContactIds, beat.contactId],
+            }));
+            break;
+          }
+          case 'contact_status': {
+            set((s) => ({
+              contacts: s.contacts.map((c) =>
+                c.id === beat.contactId ? { ...c, status: beat.status } : c
+              ),
+            }));
+            break;
+          }
           case 'unlock_file': {
             upsertFile(beat.path, {
               folder: beat.folder,
@@ -500,7 +718,8 @@ export const useOsStore = create<OsState>((set, get) => {
             set((s) => {
               const alreadyExists = s.pendingHooks.some(
                 (h) =>
-                  h.targetPath === beat.hook.targetPath &&
+                  h.event === beat.hook.event &&
+                  h.target === beat.hook.target &&
                   h.targetKnot === beat.hook.targetKnot &&
                   h.resumeMode === beat.hook.resumeMode
               );
@@ -509,7 +728,7 @@ export const useOsStore = create<OsState>((set, get) => {
             });
             appendDebugLog(
               'hook_registered',
-              `Waiting on file open: ${beat.hook.targetPath}${
+              `Waiting on ${beat.hook.event}: ${beat.hook.target}${
                 beat.hook.targetKnot ? ` -> ${beat.hook.targetKnot}` : ' (pause/continue)'
               }`
             );
@@ -530,6 +749,53 @@ export const useOsStore = create<OsState>((set, get) => {
       }
       queueRunning = false;
     }
+  }
+
+  function executeHooks(matched: EventHook[]) {
+    set((state) => ({
+      pendingHooks: state.pendingHooks.filter(
+        (h) => !matched.some((m) => m.id === h.id)
+      ),
+    }));
+
+    for (const hook of matched) {
+      appendDebugLog(
+        'hook_fired',
+        `Fired ${hook.event} on ${hook.target}${
+          hook.targetKnot ? ` -> ${hook.targetKnot}` : ' (resuming)'
+        }`
+      );
+
+      if (!storyInstance) continue;
+      try {
+        if (hook.resumeMode === 'knot' && hook.targetKnot) {
+          storyInstance.ChoosePathString(hook.targetKnot);
+          drainStory();
+        } else {
+          pausedByContinueHook = false;
+          drainStory();
+        }
+      } catch (err) {
+        appendDebugLog(
+          'error',
+          `Hook execution failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
+  function fireMatchingHooks(
+    event: EventHookType,
+    predicate: (hook: EventHook) => boolean
+  ): boolean {
+    const matched = get().pendingHooks.filter(
+      (h) => h.event === event && predicate(h)
+    );
+    if (matched.length === 0) {
+      return false;
+    }
+    executeHooks(matched);
+    return true;
   }
 
   function drainStory() {
@@ -560,10 +826,35 @@ export const useOsStore = create<OsState>((set, get) => {
         appendDebugLog('ink_line', line || '(tag-only beat)', { tags: rawTags });
       }
 
+      if (parsed.setTimeMinutes !== undefined) {
+        dispatchQueue.push({
+          kind: 'set_time',
+          minutes: parsed.setTimeMinutes,
+        });
+      }
       if (parsed.advanceMinutes > 0) {
         dispatchQueue.push({
           kind: 'advance_time',
           minutes: parsed.advanceMinutes,
+        });
+      }
+      if (parsed.setDayLabel) {
+        dispatchQueue.push({
+          kind: 'set_day',
+          dayLabel: parsed.setDayLabel,
+        });
+      }
+      for (const contactId of parsed.contactUnlocks) {
+        dispatchQueue.push({
+          kind: 'contact_unlock',
+          contactId,
+        });
+      }
+      for (const statusUpdate of parsed.contactStatuses) {
+        dispatchQueue.push({
+          kind: 'contact_status',
+          contactId: statusUpdate.contactId,
+          status: statusUpdate.status,
         });
       }
 
@@ -625,7 +916,6 @@ export const useOsStore = create<OsState>((set, get) => {
             },
           });
         } else if (parsed.attachments.length > 0) {
-          // If there is text alongside an attachment, emit text first, then attachment card(s)
           if (line) {
             dispatchQueue.push({
               kind: 'chat',
@@ -699,7 +989,7 @@ export const useOsStore = create<OsState>((set, get) => {
         const hook: EventHook = {
           id: makeId('hook'),
           event: hookSpec.event,
-          targetPath: hookSpec.targetPath,
+          target: hookSpec.target,
           resumeMode: hookSpec.resumeMode,
           targetKnot: hookSpec.targetKnot,
           registeredAt: formatClock24(get().clockMinutes),
@@ -732,7 +1022,6 @@ export const useOsStore = create<OsState>((set, get) => {
         if (channel === 'chat') {
           targetId = senderOverride ?? currentSenderId;
         } else {
-          // Target latest email from senderOverride or activeEmailDraftId or newest email
           const state = get();
           const queuedEmailExists = dispatchQueue.some((b) => b.kind === 'email_line');
           if (senderOverride) {
@@ -759,7 +1048,6 @@ export const useOsStore = create<OsState>((set, get) => {
         };
       });
 
-      // Resolve '__latest_email__' after queued email_line items execute
       dispatchQueue.push({
         kind: 'set_choices',
         choices,
@@ -772,7 +1060,6 @@ export const useOsStore = create<OsState>((set, get) => {
     }
 
     void processDispatchQueue(sessionToken).then(() => {
-      // Fix up any '__latest_email__' choice targets once emails are created
       const currentChoices = get().activeChoices;
       if (currentChoices.some((c) => c.targetId === '__latest_email__')) {
         const emails = get().emails;
@@ -808,8 +1095,10 @@ export const useOsStore = create<OsState>((set, get) => {
     instantTyping: false,
 
     clockMinutes: 9 * 60,
+    dayLabel: 'Day 1',
 
     contacts: [],
+    unlockedContactIds: [],
     activeContactId: null,
     chatMessages: [],
     unreadChatCounts: {},
@@ -822,12 +1111,16 @@ export const useOsStore = create<OsState>((set, get) => {
     selectedFolder: 'Documents',
     selectedFileId: null,
 
+    notes: [],
+    activeNoteId: null,
+
     activeChannel: 'chat',
     activeSenderId: 'system_guide',
     activeEmailDraftId: null,
     activeChoices: [],
     pendingHooks: [],
     debugLogs: [],
+    checkpoints: [],
 
     initApp: async () => {
       if (initStarted) return;
@@ -870,86 +1163,80 @@ export const useOsStore = create<OsState>((set, get) => {
         const { manifest, story, compiledFrom, compilerWarnings } = bundle;
         storyInstance = story;
 
+        const resolvedId = manifest.id || scenarioId;
+        const checkpoints = loadCheckpointsFromStorage(resolvedId);
+
         const startMinutes = parseClockMinutes(manifest.startTime || '09:00');
         const startTimeStr = formatClock24(startMinutes);
+        const initialUnlockedContacts = manifest.contacts
+          .filter((c) => !c.hiddenByDefault)
+          .map((c) => c.id);
         const defaultContact =
-          manifest.contacts.find((c) => c.pinned)?.id ??
+          manifest.contacts.find(
+            (c) => c.pinned && initialUnlockedContacts.includes(c.id)
+          )?.id ??
+          manifest.contacts.find((c) => initialUnlockedContacts.includes(c.id))?.id ??
           manifest.contacts[0]?.id ??
           null;
 
         const initialFiles = buildInitialFiles(manifest, startTimeStr);
+        const initialNotes: NoteItem[] = [
+          {
+            id: 'note_default',
+            title: 'Shift Notes',
+            content: '',
+            updatedAt: startTimeStr,
+          },
+        ];
+
+        set({
+          scenarioId: resolvedId,
+          manifest,
+          compiledFrom,
+          compilerWarnings,
+          checkpoints,
+        });
 
         if (opts?.forceReset) {
-          localStorage.removeItem(`${STORAGE_PREFIX}${scenarioId}`);
+          localStorage.removeItem(`${STORAGE_PREFIX}${resolvedId}`);
         }
 
         const savedRaw = !opts?.forceReset
-          ? localStorage.getItem(`${STORAGE_PREFIX}${scenarioId}`)
+          ? localStorage.getItem(`${STORAGE_PREFIX}${resolvedId}`)
           : null;
 
         if (savedRaw) {
           try {
             const saved = JSON.parse(savedRaw) as PersistedSnapshot;
-            story.state.LoadJson(saved.inkStateJson);
-            pausedByContinueHook = Boolean(saved.pausedByContinueHook);
-
-            set({
-              isLoading: false,
-              scenarioId: manifest.id || scenarioId,
-              manifest,
-              compiledFrom,
-              compilerWarnings,
-              windows: createDefaultWindows(),
-              focusedApp: 'messages',
-              nextZIndex: 14,
-              toasts: [],
-              notifications: [],
-              clockMinutes: saved.clockMinutes,
-              contacts: manifest.contacts,
-              activeContactId: defaultContact,
-              chatMessages: saved.chatMessages,
-              unreadChatCounts: saved.unreadChatCounts ?? {},
-              emails: saved.emails,
-              activeEmailId: saved.emails[saved.emails.length - 1]?.id ?? null,
-              files: saved.files,
-              selectedFolder: 'Documents',
-              selectedFileId: saved.files[0]?.id ?? null,
-              activeChannel: saved.activeChannel,
-              activeSenderId: saved.activeSenderId,
-              activeEmailDraftId: saved.activeEmailDraftId,
-              activeChoices: saved.activeChoices,
-              pendingHooks: saved.pendingHooks,
-              debugLogs: [
-                {
-                  id: makeId('log'),
-                  time: formatClock24(saved.clockMinutes),
-                  type: 'ink_line',
-                  summary: `Restored saved session for "${manifest.title}"`,
-                },
-              ],
-            });
-            localStorage.setItem(ACTIVE_SCENARIO_KEY, manifest.id || scenarioId);
-            return;
+            if (
+              applySnapshot(
+                saved,
+                `Restored saved session for "${manifest.title}"`
+              )
+            ) {
+              localStorage.setItem(ACTIVE_SCENARIO_KEY, resolvedId);
+              return;
+            }
           } catch (restoreErr) {
-            // Incompatible saved state (e.g. story.ink was edited); start fresh cleanly
-            localStorage.removeItem(`${STORAGE_PREFIX}${scenarioId}`);
-            console.warn('Starting fresh after incompatible saved Ink state:', restoreErr);
+            localStorage.removeItem(`${STORAGE_PREFIX}${resolvedId}`);
+            console.warn(
+              'Starting fresh after incompatible saved Ink state:',
+              restoreErr
+            );
           }
         }
 
         set({
           isLoading: false,
-          scenarioId: manifest.id || scenarioId,
-          manifest,
-          compiledFrom,
-          compilerWarnings,
           windows: createDefaultWindows(),
           focusedApp: 'messages',
           nextZIndex: 14,
           toasts: [],
           notifications: [],
           clockMinutes: startMinutes,
+          dayLabel: manifest.dayLabel || 'Day 1',
           contacts: manifest.contacts,
+          unlockedContactIds: initialUnlockedContacts,
           activeContactId: defaultContact,
           chatMessages: [],
           unreadChatCounts: {},
@@ -958,6 +1245,8 @@ export const useOsStore = create<OsState>((set, get) => {
           files: initialFiles,
           selectedFolder: 'Documents',
           selectedFileId: initialFiles[0]?.id ?? null,
+          notes: initialNotes,
+          activeNoteId: initialNotes[0].id,
           activeChannel: 'chat',
           activeSenderId: defaultContact ?? 'system_guide',
           activeEmailDraftId: null,
@@ -973,7 +1262,7 @@ export const useOsStore = create<OsState>((set, get) => {
           ],
         });
 
-        localStorage.setItem(ACTIVE_SCENARIO_KEY, manifest.id || scenarioId);
+        localStorage.setItem(ACTIVE_SCENARIO_KEY, resolvedId);
         drainStory();
       } catch (err) {
         set({
@@ -1097,6 +1386,19 @@ export const useOsStore = create<OsState>((set, get) => {
       }));
     },
 
+    resizeWindow: (appId, size, position) => {
+      set((state) => ({
+        windows: {
+          ...state.windows,
+          [appId]: {
+            ...state.windows[appId],
+            size,
+            ...(position ? { position } : {}),
+          },
+        },
+      }));
+    },
+
     toggleStartMenu: (open) => {
       set((state) => ({
         startMenuOpen: typeof open === 'boolean' ? open : !state.startMenuOpen,
@@ -1161,12 +1463,27 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     selectEmail: (emailId) => {
+      const targetEmail = get().emails.find((e) => e.id === emailId);
+      if (!targetEmail) return;
+      const wasUnread = !targetEmail.read;
+
       set((state) => ({
         activeEmailId: emailId,
         emails: state.emails.map((e) =>
           e.id === emailId ? { ...e, read: true } : e
         ),
       }));
+
+      if (wasUnread) {
+        appendDebugLog('email_read', `Read email: "${targetEmail.subject}"`);
+      }
+
+      const fired = fireMatchingHooks('on_email_read', (hook) =>
+        matchesEmailHookTarget(targetEmail, hook.target)
+      );
+      if (!fired && wasUnread) {
+        persistSnapshot();
+      }
     },
 
     toggleEmailFlag: (emailId) => {
@@ -1175,6 +1492,7 @@ export const useOsStore = create<OsState>((set, get) => {
           e.id === emailId ? { ...e, flagged: !e.flagged } : e
         ),
       }));
+      persistSnapshot();
     },
 
     selectFolder: (folder) => {
@@ -1215,48 +1533,30 @@ export const useOsStore = create<OsState>((set, get) => {
 
       appendDebugLog('file_open', `Opened file: ${normalized}`);
 
-      const hooks = get().pendingHooks;
-      const matched = hooks.filter(
+      const fired = fireMatchingHooks(
+        'on_file_open',
         (h) =>
-          h.targetPath === normalized ||
-          h.targetPath.split('/').pop() === targetBasename
+          h.target === normalized ||
+          (h.target.split('/').pop() ?? h.target) === targetBasename
       );
 
-      if (matched.length === 0) {
+      if (!fired) {
         persistSnapshot();
-        return;
       }
+    },
 
-      set((state) => ({
-        pendingHooks: state.pendingHooks.filter(
-          (h) => !matched.some((m) => m.id === h.id)
-        ),
-      }));
+    onAudioPlayed: (filePath) => {
+      const normalized = normalizeScenarioPath(filePath);
+      const targetBasename = normalized.split('/').pop() ?? normalized;
 
-      for (const hook of matched) {
-        appendDebugLog(
-          'hook_fired',
-          `Fired hook on ${hook.targetPath}${
-            hook.targetKnot ? ` -> ${hook.targetKnot}` : ' (resuming)'
-          }`
-        );
+      appendDebugLog('audio_play', `Played audio: ${normalized}`);
 
-        if (!storyInstance) continue;
-        try {
-          if (hook.resumeMode === 'knot' && hook.targetKnot) {
-            storyInstance.ChoosePathString(hook.targetKnot);
-            drainStory();
-          } else {
-            pausedByContinueHook = false;
-            drainStory();
-          }
-        } catch (err) {
-          appendDebugLog(
-            'error',
-            `Hook execution failed: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-      }
+      fireMatchingHooks(
+        'on_audio_play',
+        (h) =>
+          h.target === normalized ||
+          (h.target.split('/').pop() ?? h.target) === targetBasename
+      );
     },
 
     selectChoice: (choiceIndex) => {
@@ -1311,7 +1611,47 @@ export const useOsStore = create<OsState>((set, get) => {
     forceTriggerHook: (hookId) => {
       const hook = get().pendingHooks.find((h) => h.id === hookId);
       if (!hook) return;
-      get().onFileOpened(hook.targetPath);
+      executeHooks([hook]);
+    },
+
+    selectNote: (noteId) => {
+      set({ activeNoteId: noteId });
+    },
+
+    createNote: (title) => {
+      const nowStr = formatClock24(get().clockMinutes);
+      const count = get().notes.length + 1;
+      const note: NoteItem = {
+        id: makeId('note'),
+        title: title?.trim() || `Incident Note ${count}`,
+        content: '',
+        updatedAt: nowStr,
+      };
+      set((s) => ({
+        notes: [note, ...s.notes],
+        activeNoteId: note.id,
+      }));
+      persistSnapshot();
+    },
+
+    updateNote: (noteId, patch) => {
+      const nowStr = formatClock24(get().clockMinutes);
+      set((s) => ({
+        notes: s.notes.map((n) =>
+          n.id === noteId ? { ...n, ...patch, updatedAt: nowStr } : n
+        ),
+      }));
+      persistSnapshot();
+    },
+
+    deleteNote: (noteId) => {
+      set((s) => {
+        const remaining = s.notes.filter((n) => n.id !== noteId);
+        const nextActive =
+          s.activeNoteId === noteId ? (remaining[0]?.id ?? null) : s.activeNoteId;
+        return { notes: remaining, activeNoteId: nextActive };
+      });
+      persistSnapshot();
     },
 
     getInkVariables: () => {
@@ -1334,6 +1674,157 @@ export const useOsStore = create<OsState>((set, get) => {
         return vars;
       } catch {
         return [];
+      }
+    },
+
+    getInkKnots: () => {
+      if (!storyInstance) return [];
+      try {
+        const container = storyInstance.mainContentContainer as unknown as {
+          namedContent?: Map<string, unknown> | Record<string, unknown>;
+        };
+        const named = container?.namedContent;
+        if (!named) return [];
+        const keys =
+          named instanceof Map
+            ? Array.from(named.keys())
+            : Object.keys(named);
+        return keys
+          .filter((k) => !k.startsWith('$') && k !== 'global decl')
+          .sort();
+      } catch {
+        return [];
+      }
+    },
+
+    jumpToKnot: (knotName) => {
+      if (!storyInstance || !knotName) return;
+      sessionToken += 1;
+      dispatchQueue.length = 0;
+      queueRunning = false;
+      pausedByContinueHook = false;
+
+      set({
+        activeChoices: [],
+        typingContactId: null,
+      });
+
+      appendDebugLog('director', `Jumped to knot: ${knotName}`);
+      try {
+        storyInstance.ChoosePathString(knotName);
+        drainStory();
+      } catch (err) {
+        appendDebugLog(
+          'error',
+          `Knot jump failed (${knotName}): ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    },
+
+    setInkVariable: (name, rawValue) => {
+      if (!storyInstance) return;
+      const trimmed = rawValue.trim();
+      let parsed: string | number | boolean = rawValue;
+      if (trimmed === 'true') {
+        parsed = true;
+      } else if (trimmed === 'false') {
+        parsed = false;
+      } else if (trimmed !== '' && !Number.isNaN(Number(trimmed))) {
+        parsed = Number(trimmed);
+      }
+
+      try {
+        storyInstance.variablesState.$(name, parsed);
+        appendDebugLog('director', `Set variable ${name} = ${JSON.stringify(parsed)}`);
+        persistSnapshot();
+      } catch (err) {
+        appendDebugLog(
+          'error',
+          `Failed to set variable "${name}": ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    },
+
+    saveCheckpoint: (name) => {
+      const snapshot = buildCurrentSnapshot();
+      const scenarioId = get().scenarioId;
+      if (!snapshot || !scenarioId) return;
+
+      const clockStr = formatClock24(snapshot.clockMinutes);
+      const count = get().checkpoints.length + 1;
+      const record: CheckpointRecord = {
+        id: makeId('cp'),
+        name: name?.trim() || `Checkpoint ${count} (${clockStr})`,
+        savedAt: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }),
+        clockStr,
+        dayLabel: snapshot.dayLabel,
+        snapshot,
+      };
+
+      const next = [record, ...get().checkpoints].slice(0, 25);
+      set({ checkpoints: next });
+      persistCheckpointsToStorage(scenarioId, next);
+      appendDebugLog('checkpoint', `Saved checkpoint: "${record.name}"`);
+    },
+
+    restoreCheckpoint: (checkpointId) => {
+      const record = get().checkpoints.find((c) => c.id === checkpointId);
+      if (!record) return false;
+      return applySnapshot(record.snapshot, `Restored checkpoint: "${record.name}"`);
+    },
+
+    deleteCheckpoint: (checkpointId) => {
+      const scenarioId = get().scenarioId;
+      const next = get().checkpoints.filter((c) => c.id !== checkpointId);
+      set({ checkpoints: next });
+      if (scenarioId) {
+        persistCheckpointsToStorage(scenarioId, next);
+      }
+    },
+
+    exportSaveJson: () => {
+      const snapshot = buildCurrentSnapshot();
+      return JSON.stringify(
+        {
+          scenarioId: get().scenarioId,
+          exportedAt: new Date().toISOString(),
+          snapshot,
+        },
+        null,
+        2
+      );
+    },
+
+    importSaveJson: (rawJson) => {
+      try {
+        const parsed = JSON.parse(rawJson) as {
+          scenarioId?: string;
+          snapshot?: PersistedSnapshot;
+        } & Partial<PersistedSnapshot>;
+
+        const snapshot: PersistedSnapshot | undefined = parsed.snapshot
+          ? parsed.snapshot
+          : typeof parsed.inkStateJson === 'string'
+            ? (parsed as PersistedSnapshot)
+            : undefined;
+
+        if (!snapshot || typeof snapshot.inkStateJson !== 'string') {
+          return { ok: false, error: 'Invalid save JSON: missing snapshot.inkStateJson' };
+        }
+
+        const ok = applySnapshot(snapshot, 'Imported save snapshot from JSON');
+        return ok
+          ? { ok: true }
+          : { ok: false, error: 'Story runtime not ready to restore snapshot.' };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
     },
   };

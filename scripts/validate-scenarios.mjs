@@ -59,8 +59,9 @@ function checkAssetPath({
 }
 
 function scanInkTags(inkSource) {
-  const senders = new Set();
+  const contactRefs = [];
   const assets = [];
+  const tagErrors = [];
 
   const lines = inkSource.split(/\r?\n/);
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
@@ -82,32 +83,88 @@ function scanInkTags(inkSource) {
       const normalizedTag = seg.replace(/\\\|/g, '|').trim();
       if (!normalizedTag) continue;
 
-      const primary = normalizedTag.split('|')[0]?.trim() ?? '';
+      const pipeParts = normalizedTag.split('|').map((p) => p.trim()).filter(Boolean);
+      const primary = pipeParts[0] ?? '';
       const colonIdx = primary.indexOf(':');
       if (colonIdx === -1) continue;
 
       const key = primary.slice(0, colonIdx).trim().toUpperCase();
       const value = primary.slice(colonIdx + 1).trim();
-      if (!value) continue;
-
       const lineNum = lineIdx + 1;
 
-      if (key === 'SENDER') {
-        senders.add(value);
+      if (!value) {
+        if (key === 'SET_TIME' || key === 'CONTACT_STATUS' || key === 'EVENT_HOOK') {
+          tagErrors.push({ lineNum, message: `Empty value in # ${key}` });
+        }
+        continue;
+      }
+
+      if (key === 'SENDER' || key === 'CONTACT_UNLOCK') {
+        contactRefs.push({ id: value, tag: key, lineNum });
+      } else if (key === 'CONTACT_STATUS') {
+        contactRefs.push({ id: value, tag: key, lineNum });
+        const rawStatus = (pipeParts[1] ?? '').trim().toLowerCase();
+        const statusVal = rawStatus.startsWith('status:')
+          ? rawStatus.slice('status:'.length).trim()
+          : rawStatus;
+        if (
+          statusVal !== 'online' &&
+          statusVal !== 'away' &&
+          statusVal !== 'offline'
+        ) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # CONTACT_STATUS "${rawStatus || '(missing)'}" (expected online, away, or offline)`,
+          });
+        }
+      } else if (key === 'SET_TIME') {
+        const match = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(value);
+        const hours = match ? Number(match[1]) : -1;
+        const mins = match ? Number(match[2]) : -1;
+        if (!match || hours < 0 || hours > 23 || mins < 0 || mins > 59) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # SET_TIME "${value}" (expected 24-hour HH:MM)`,
+          });
+        }
       } else if (key === 'ATTACHMENT' || key === 'FILE_UNLOCK') {
         assets.push({ path: value, kind: key, lineNum });
       } else if (key === 'VOICE_NOTE') {
         assets.push({ path: value, kind: 'VOICE_NOTE', lineNum, isAudio: true });
       } else if (key === 'EVENT_HOOK') {
-        const match = /^on_file_open:(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(value);
-        if (match?.[1]) {
-          assets.push({ path: match[1].trim(), kind: 'EVENT_HOOK', lineNum });
+        const match =
+          /^(on_file_open|on_audio_play|on_email_read):(.*?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
+            value
+          );
+        if (!match) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # EVENT_HOOK "${value}" (expected on_file_open:<path>, on_audio_play:<path>, or on_email_read:<matcher>)`,
+          });
+        } else {
+          const eventKind = match[1].toLowerCase();
+          const target = match[2].trim();
+          if (!target) {
+            tagErrors.push({
+              lineNum,
+              message: `Empty target in # EVENT_HOOK (${eventKind})`,
+            });
+          } else if (eventKind === 'on_file_open') {
+            assets.push({ path: target, kind: 'EVENT_HOOK', lineNum });
+          } else if (eventKind === 'on_audio_play') {
+            assets.push({
+              path: target,
+              kind: 'EVENT_HOOK',
+              lineNum,
+              isAudio: true,
+            });
+          }
         }
       }
     }
   }
 
-  return { senders, assets };
+  return { contactRefs, assets, tagErrors };
 }
 
 export function validateScenarios(scenariosDir = resolveScenariosDir()) {
@@ -301,11 +358,14 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
 
     const inkFiles = collectInkFiles(scenarioDir);
     for (const [relInkPath, inkSource] of Object.entries(inkFiles)) {
-      const { senders, assets } = scanInkTags(inkSource);
-      for (const senderId of senders) {
-        if (!contactIds.has(senderId)) {
+      const { contactRefs, assets, tagErrors } = scanInkTags(inkSource);
+      for (const err of tagErrors) {
+        errors.push(`[${scenarioId}] ${relInkPath}:${err.lineNum} ${err.message}`);
+      }
+      for (const ref of contactRefs) {
+        if (!contactIds.has(ref.id)) {
           warnings.push(
-            `[${scenarioId}] ${relInkPath} references # SENDER: "${senderId}" which is not in scenario.json contacts[].`
+            `[${scenarioId}] ${relInkPath}:${ref.lineNum} references # ${ref.tag}: "${ref.id}" which is not in scenario.json contacts[].`
           );
         }
       }

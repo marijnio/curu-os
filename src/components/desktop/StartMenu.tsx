@@ -7,6 +7,7 @@ import {
   Mail,
   MessageSquare,
   RotateCcw,
+  StickyNote,
 } from 'lucide-react';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -45,7 +46,7 @@ export function StartMenu() {
             </div>
           </div>
           <span className="rounded-[2px] bg-[#262b35] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-            {manifest?.theme?.osVersion || 'v0.1'}
+            {manifest?.theme?.osVersion || 'v0.2'}
           </span>
         </div>
       </div>
@@ -78,6 +79,14 @@ export function StartMenu() {
         >
           <Folder className="h-4 w-4 fill-[#eab308] text-[#ca8a04]" />
           <span>File Explorer</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openApp('notes')}
+          className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a]"
+        >
+          <StickyNote className="h-4 w-4 text-[#f59e0b]" />
+          <span>Notes</span>
         </button>
       </div>
 

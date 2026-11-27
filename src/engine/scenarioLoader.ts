@@ -64,9 +64,93 @@ export async function fetchScenarioIndex(): Promise<ScenarioSummary[]> {
   return summaries;
 }
 
+function resolvePosixRelative(fromFile: string, includeTarget: string): string {
+  const cleanTarget = includeTarget.trim().replace(/\\/g, '/');
+  const fromDirParts = normalizeScenarioPath(fromFile).split('/').slice(0, -1);
+  const targetParts = cleanTarget.replace(/^\/+/, '').split('/');
+  const stack = cleanTarget.startsWith('/') ? [] : [...fromDirParts];
+
+  for (const part of targetParts) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      stack.pop();
+    } else {
+      stack.push(part);
+    }
+  }
+  return stack.join('/');
+}
+
+function extractInkIncludes(source: string): string[] {
+  const includes: string[] = [];
+  for (const line of source.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//')) continue;
+    const match = /^INCLUDE\s+(.+)$/i.exec(trimmed);
+    if (match?.[1]) {
+      const target = match[1].replace(/\s*\/\/.*$/, '').trim();
+      if (target) includes.push(target);
+    }
+  }
+  return includes;
+}
+
+async function fetchInkTree(
+  scenarioId: string,
+  entryFile: string
+): Promise<{
+  entryKey: string;
+  entrySource: string;
+  fileMap: Record<string, string>;
+} | null> {
+  const entryKey = normalizeScenarioPath(entryFile);
+  const entryRes = await fetch(resolveScenarioAssetUrl(scenarioId, entryKey), {
+    cache: 'no-store',
+  });
+  if (!entryRes.ok) {
+    return null;
+  }
+
+  const fileMap: Record<string, string> = {};
+  const visited = new Set<string>();
+
+  async function visit(fileKey: string, initialText?: string): Promise<void> {
+    if (visited.has(fileKey)) return;
+    visited.add(fileKey);
+
+    let source = initialText;
+    if (source === undefined) {
+      const res = await fetch(resolveScenarioAssetUrl(scenarioId, fileKey), {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(
+          `Failed to load included Ink file "${fileKey}" (${res.status}) for scenario "${scenarioId}"`
+        );
+      }
+      source = await res.text();
+    }
+
+    fileMap[fileKey] = source;
+
+    for (const includeTarget of extractInkIncludes(source)) {
+      const resolvedInclude = resolvePosixRelative(fileKey, includeTarget);
+      if (resolvedInclude) {
+        await visit(resolvedInclude);
+      }
+    }
+  }
+
+  const entrySource = await entryRes.text();
+  await visit(entryKey, entrySource);
+
+  return { entryKey, entrySource, fileMap };
+}
+
 function compileInkSourceInBrowser(
   source: string,
-  filename: string
+  filename: string,
+  fileMap: Record<string, string>
 ): { story: Story; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -82,7 +166,7 @@ function compileInkSourceInBrowser(
         warnings.push(message);
       }
     },
-    new JsonFileHandler({ [filename]: source })
+    new JsonFileHandler(fileMap)
   );
 
   const compiler = new Compiler(source, options);
@@ -117,13 +201,15 @@ export async function loadScenarioBundle(scenarioId: string): Promise<LoadedScen
 
   const manifest = (await manifestRes.json()) as ScenarioManifest;
   const storyFile = manifest.storyFile || 'story.ink';
-  const inkUrl = resolveScenarioAssetUrl(scenarioId, storyFile);
 
   if (storyFile.toLowerCase().endsWith('.ink')) {
-    const inkRes = await fetch(inkUrl, { cache: 'no-store' });
-    if (inkRes.ok) {
-      const inkSource = await inkRes.text();
-      const { story, warnings } = compileInkSourceInBrowser(inkSource, storyFile);
+    const tree = await fetchInkTree(scenarioId, storyFile);
+    if (tree) {
+      const { story, warnings } = compileInkSourceInBrowser(
+        tree.entrySource,
+        tree.entryKey,
+        tree.fileMap
+      );
       return {
         manifest,
         story,

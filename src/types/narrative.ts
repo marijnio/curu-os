@@ -40,10 +40,12 @@ export interface ActiveChoice {
   silent?: boolean;
 }
 
+export type EventHookType = 'on_file_open' | 'on_audio_play' | 'on_email_read';
+
 export interface EventHook {
   id: string;
-  event: 'on_file_open';
-  targetPath: string;
+  event: EventHookType;
+  target: string;
   resumeMode: 'continue' | 'knot';
   targetKnot?: string;
   registeredAt: string;
@@ -59,6 +61,10 @@ export interface DebugLogEntry {
     | 'hook_registered'
     | 'hook_fired'
     | 'file_open'
+    | 'audio_play'
+    | 'email_read'
+    | 'checkpoint'
+    | 'director'
     | 'error';
   summary: string;
   detail?: unknown;
