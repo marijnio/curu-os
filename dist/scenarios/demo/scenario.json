@@ -1,0 +1,63 @@
+{
+  "id": "demo",
+  "title": "First Morning — Meridian Archive",
+  "subtitle": "Day 1 Shift · Archive Operations",
+  "description": "A short introductory shift inside Meridian Archive. Check your onboarding voice note, inspect the morning briefing, and decide how to handle an unlogged 02:14 AM vault entry.",
+  "startTime": "09:00",
+  "dayLabel": "Monday · Day 1",
+  "storyFile": "story.ink",
+  "contacts": [
+    {
+      "id": "system_guide",
+      "name": "System Guide",
+      "role": "Curu-OS Onboarding Assistant",
+      "email": "guide@curu-os.local",
+      "avatarColor": "#059669",
+      "avatarInitials": "SG",
+      "pinned": true,
+      "status": "online"
+    },
+    {
+      "id": "elena_vance",
+      "name": "Elena Vance",
+      "role": "Operations Lead · Floor 4",
+      "email": "elena.vance@meridian.local",
+      "avatarColor": "#0284c7",
+      "avatarInitials": "EV",
+      "pinned": false,
+      "status": "online"
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/day1_briefing.md",
+      "name": "Day1_Briefing.md",
+      "folder": "Documents",
+      "kind": "markdown",
+      "sizeLabel": "2.4 KB"
+    },
+    {
+      "path": "docs/access_log_extract.md",
+      "name": "Access_Log_Extract.md",
+      "folder": "Documents",
+      "kind": "markdown",
+      "sizeLabel": "1.8 KB"
+    },
+    {
+      "path": "media/sector_badge.png",
+      "name": "Sector_Vault4_Badge.png",
+      "folder": "Images",
+      "kind": "image",
+      "sizeLabel": "14 KB"
+    },
+    {
+      "path": "media/welcome_briefing.mp3",
+      "name": "Welcome_Briefing_0900.mp3",
+      "folder": "Voice Notes",
+      "kind": "audio",
+      "sizeLabel": "210 KB",
+      "duration": "0:18",
+      "transcript": "Morning, welcome to Meridian Archive. Before Elena pulls you into the 9:30 standup, check your Messages for the Day 1 briefing file and verify anything marked overnight. Talk in a sec."
+    }
+  ]
+}

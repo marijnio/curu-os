@@ -1,0 +1,11 @@
+services:
+  curu-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: curu-os
+    ports:
+      - "8080:80"
+    volumes:
+      - ./scenarios:/usr/share/nginx/html/scenarios
+    restart: unless-stopped
