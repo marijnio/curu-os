@@ -74,6 +74,8 @@ export interface UiTranslations {
     staff: string;
     attachments: (count: number) => string;
     sentReply: string;
+    sendingReply: string;
+    syncingInbox: string;
     replyActions: string;
     send: string;
     selectEmail: string;
@@ -276,6 +278,8 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       staff: 'Staff',
       attachments: (count) => `Attachments (${count})`,
       sentReply: 'Sent Reply',
+      sendingReply: 'Sending reply...',
+      syncingInbox: 'Syncing...',
       replyActions: 'Reply Actions',
       send: 'Send',
       selectEmail: 'Select an email to read.',
@@ -479,6 +483,8 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       staff: 'Medewerker',
       attachments: (count) => `Bijlagen (${count})`,
       sentReply: 'Verzonden antwoord',
+      sendingReply: 'Antwoord verzenden...',
+      syncingInbox: 'Synchroniseren...',
       replyActions: 'Antwoordopties',
       send: 'Versturen',
       selectEmail: 'Selecteer een e-mail om te lezen.',

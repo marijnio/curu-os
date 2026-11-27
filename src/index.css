@@ -179,3 +179,40 @@
   border-top: 1px solid #e5e7eb;
   margin: 1rem 0;
 }
+
+@keyframes curu-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes curu-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.curu-msg-enter {
+  animation: curu-msg-in 180ms ease-out both;
+}
+
+.curu-toast-enter {
+  animation: curu-toast-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curu-msg-enter,
+  .curu-toast-enter {
+    animation: none;
+  }
+}

@@ -56,6 +56,7 @@ export interface ParsedTagBundle {
   input?: ParsedInputTag;
   flagEmail: boolean;
   typingDelayMs?: number;
+  delayMs?: number;
   silent: boolean;
   unknownTags: string[];
 }
@@ -119,6 +120,15 @@ export function inferFileMeta(relativePath: string): {
     return { name, kind: 'audio', folder: 'Voice Notes' };
   }
   return { name, kind: 'text', folder: 'Documents' };
+}
+
+function parseDelayMs(raw: string): number | undefined {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(ms|s)?\s*$/i.exec(raw);
+  if (!match) return undefined;
+  const num = Number(match[1]);
+  if (!Number.isFinite(num) || num < 0) return undefined;
+  const unit = (match[2] ?? 'ms').toLowerCase();
+  return unit === 's' ? Math.round(num * 1000) : Math.round(num);
 }
 
 function splitKeyColon(segment: string): { key: string; value: string } | null {
@@ -338,6 +348,15 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
         const ms = Number.parseInt(value, 10);
         if (!Number.isNaN(ms) && ms >= 0) {
           bundle.typingDelayMs = ms;
+        }
+        break;
+      }
+      case 'DELAY': {
+        const ms = parseDelayMs(value);
+        if (ms !== undefined) {
+          bundle.delayMs = ms;
+        } else {
+          bundle.unknownTags.push(trimmed);
         }
         break;
       }

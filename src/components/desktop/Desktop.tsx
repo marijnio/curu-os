@@ -182,7 +182,7 @@ export function Desktop() {
 
       {/* Loading / Error State */}
       {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/45">
           <div className="flex items-center gap-3 rounded-[2px] border border-slate-300 bg-white px-5 py-3.5 text-sm text-slate-800 shadow-xl">
             <Loader2 className="h-4 w-4 animate-spin text-[#0067c0]" />
             {t.desktop.loadingWorkspace}
@@ -191,7 +191,7 @@ export function Desktop() {
       )}
 
       {loadError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4">
           <div className="max-w-md rounded-[3px] border border-slate-300 bg-white p-5 shadow-2xl">
             <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
               <AlertTriangle className="h-5 w-5 text-rose-600" />
@@ -213,44 +213,46 @@ export function Desktop() {
       )}
 
       {/* Windows Layer */}
-      <Window
-        windowState={windows.messages}
-        icon={<MessageSquare className="h-3.5 w-3.5 fill-[#25b864] text-[#25b864]" />}
-      >
-        <MessagesApp />
-      </Window>
+      <div className="relative z-20">
+        <Window
+          windowState={windows.messages}
+          icon={<MessageSquare className="h-3.5 w-3.5 fill-[#25b864] text-[#25b864]" />}
+        >
+          <MessagesApp />
+        </Window>
 
-      <Window
-        windowState={windows.mail}
-        icon={<Mail className="h-3.5 w-3.5 text-[#0067c0]" />}
-      >
-        <MailApp />
-      </Window>
+        <Window
+          windowState={windows.mail}
+          icon={<Mail className="h-3.5 w-3.5 text-[#0067c0]" />}
+        >
+          <MailApp />
+        </Window>
 
-      <Window
-        windowState={windows.explorer}
-        icon={<Folder className="h-3.5 w-3.5 fill-[#eab308] text-[#ca8a04]" />}
-      >
-        <FileExplorerApp />
-      </Window>
+        <Window
+          windowState={windows.explorer}
+          icon={<Folder className="h-3.5 w-3.5 fill-[#eab308] text-[#ca8a04]" />}
+        >
+          <FileExplorerApp />
+        </Window>
 
-      <Window
-        windowState={windows.notes}
-        icon={<StickyNote className="h-3.5 w-3.5 text-[#d97706]" />}
-      >
-        <NotesApp />
-      </Window>
+        <Window
+          windowState={windows.notes}
+          icon={<StickyNote className="h-3.5 w-3.5 text-[#d97706]" />}
+        >
+          <NotesApp />
+        </Window>
 
-      <Window
-        windowState={windows.director}
-        icon={<Bug className="h-3.5 w-3.5 text-slate-600" />}
-      >
-        <DirectorInspector />
-      </Window>
+        <Window
+          windowState={windows.director}
+          icon={<Bug className="h-3.5 w-3.5 text-slate-600" />}
+        >
+          <DirectorInspector />
+        </Window>
+      </div>
 
       {/* Flat Windows-style Toast Notifications */}
       {toasts.length > 0 && (
-        <div className="fixed right-3 bottom-12 z-50 flex w-80 flex-col gap-2">
+        <div className="fixed right-3 bottom-12 z-[1200] flex w-80 flex-col gap-2">
           {toasts.map((toast) => (
             <div
               key={toast.id}
@@ -258,7 +260,7 @@ export function Desktop() {
                 e.stopPropagation();
                 clickNotification(toast);
               }}
-              className="flex items-start justify-between gap-2 rounded-[2px] border border-[#3a3f4b] bg-[#1f2228] p-3 text-slate-100 shadow-xl transition-colors hover:border-[#4ca3dd] cursor-pointer"
+              className="curu-toast-enter flex items-start justify-between gap-2 rounded-[2px] border border-[#3a3f4b] bg-[#1f2228] p-3 text-slate-100 shadow-xl transition-colors hover:border-[#4ca3dd] cursor-pointer"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">

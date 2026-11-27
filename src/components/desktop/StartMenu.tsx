@@ -41,7 +41,7 @@ export function StartMenu() {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="fixed bottom-10 left-0 z-50 w-76 overflow-hidden rounded-tr-[2px] border-t border-r border-[#323742] bg-[#1b1e24] text-slate-100 shadow-2xl"
+      className="fixed bottom-10 left-0 z-[1100] w-76 overflow-hidden rounded-tr-[2px] border-t border-r border-[#323742] bg-[#1b1e24] text-slate-100 shadow-2xl"
     >
       {/* Header */}
       <div className="border-b border-[#2c313b] bg-[#14171c] px-4 py-3">

@@ -74,7 +74,7 @@ export function SystemTray() {
       {notificationsOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="fixed bottom-10 right-0 z-50 w-80 overflow-hidden rounded-tl-[2px] border-t border-l border-[#323742] bg-[#1b1e24] text-slate-100 shadow-2xl"
+          className="fixed bottom-10 right-0 z-[1100] w-80 overflow-hidden rounded-tl-[2px] border-t border-l border-[#323742] bg-[#1b1e24] text-slate-100 shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-[#2c313b] bg-[#14171c] px-3.5 py-2.5">
             <div className="text-xs font-semibold text-slate-200">

@@ -244,7 +244,7 @@ export function MessagesApp() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex flex-col ${
+                    className={`curu-msg-enter flex flex-col ${
                       isPlayer ? 'items-end' : 'items-start'
                     }`}
                   >

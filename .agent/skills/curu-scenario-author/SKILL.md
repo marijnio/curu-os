@@ -145,6 +145,7 @@ Curu-OS interprets Ink `#` tags attached to story lines and choices as desktop O
 | `# INPUT: <ink_var> \| placeholder: <hint> [\| button: <label>] [\| target: <contact_id>] => <knot>` | Pauses the story and shows a free-text input box in the targeted contact's Messages thread (defaults `target` to active `# SENDER` and `button` to localized `"Send"`). Escape `\|` as `\\|` in `.ink` source. |
 | `# FLAG_EMAIL` | Marks the active email as flagged in Mail. |
 | `# TYPING_DELAY: <ms>` | Overrides typing indicator duration in ms for the current chat line. |
+| `# DELAY: <ms \| Ns>` | Pauses delivery for the specified duration (milliseconds or seconds, e.g. `4000` or `4s`) before applying this line's email, chat, file, note, or time update. Use `0` to skip default email arrival delay. |
 | `# SILENT` | Placed on an Ink choice to avoid echoing the choice text as an outgoing player chat bubble. |
 
 ### Multi-File Ink Scripts (`INCLUDE`)

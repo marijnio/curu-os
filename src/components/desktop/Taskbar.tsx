@@ -99,7 +99,7 @@ export function Taskbar() {
   };
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-40 flex h-10 items-center justify-between border-t border-[#232730] bg-[#101216] select-none">
+    <footer className="fixed inset-x-0 bottom-0 z-[1000] flex h-10 items-center justify-between border-t border-[#232730] bg-[#101216] select-none">
       {/* Left: Start Button + Pinned/Open Apps */}
       <div className="flex h-full items-center">
         <button

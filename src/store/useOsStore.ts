@@ -68,7 +68,34 @@ let initStarted = false;
 let queueRunning = false;
 let pausedByContinueHook = false;
 
+const CHAT_REACTION_PAUSE_MS = 600;
+const CHAT_INTER_MESSAGE_GAP_MS = 550;
+const CHAT_MIN_TYPING_MS = 1000;
+const CHAT_MAX_TYPING_MS = 2800;
+const CHAT_BASE_TYPING_MS = 750;
+const CHAT_MS_PER_CHAR = 20;
+const CHAT_VOICE_NOTE_DELAY_MS = 1500;
+const CHAT_ATTACHMENT_DELAY_MS = 850;
+
+const TOAST_STAGGER_MS = 1400;
+const TOAST_DURATION_MS = 5000;
+const MAX_VISIBLE_TOASTS = 3;
+
+const EMAIL_SEND_ANIMATION_MS = 750;
+const EMAIL_REPLY_DELAY_MS = 4500;
+const EMAIL_ARRIVAL_DELAY_MS = 1500;
+const EMAIL_SYNC_PULSE_MS = 800;
+
+function computeChatTypingDelay(text: string): number {
+  const length = text.trim().length;
+  return Math.min(
+    CHAT_MAX_TYPING_MS,
+    Math.max(CHAT_MIN_TYPING_MS, CHAT_BASE_TYPING_MS + length * CHAT_MS_PER_CHAR)
+  );
+}
+
 type DispatchBeat =
+  | { kind: 'wait'; ms: number; showMailSync?: boolean }
   | { kind: 'advance_time'; minutes: number }
   | { kind: 'set_time'; minutes: number }
   | { kind: 'set_day'; dayLabel: string }
@@ -97,6 +124,17 @@ type DispatchBeat =
   | { kind: 'set_input'; input: PendingChatInput | null };
 
 const dispatchQueue: DispatchBeat[] = [];
+const pendingToastQueue: ToastNotification[] = [];
+let toastQueueRunning = false;
+let lastToastShownAt = 0;
+
+function resetTransientQueues(): void {
+  dispatchQueue.length = 0;
+  queueRunning = false;
+  pendingToastQueue.length = 0;
+  toastQueueRunning = false;
+  lastToastShownAt = 0;
+}
 
 export interface PersistedSnapshot {
   inkStateJson: string;
@@ -166,6 +204,33 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+const WINDOW_BASE_Z = 20;
+
+function bringWindowToFront(
+  windows: Record<AppId, WindowState>,
+  appId: AppId,
+  patch?: Partial<WindowState>
+): { windows: Record<AppId, WindowState>; nextZIndex: number } {
+  const ordered = (Object.keys(windows) as AppId[])
+    .sort((a, b) => windows[a].zIndex - windows[b].zIndex)
+    .filter((id) => id !== appId);
+  ordered.push(appId);
+
+  const nextWindows = { ...windows };
+  ordered.forEach((id, idx) => {
+    const base = windows[id];
+    nextWindows[id] =
+      id === appId && patch
+        ? { ...base, ...patch, zIndex: WINDOW_BASE_Z + idx }
+        : { ...base, zIndex: WINDOW_BASE_Z + idx };
+  });
+
+  return {
+    windows: nextWindows,
+    nextZIndex: WINDOW_BASE_Z + ordered.length,
+  };
+}
+
 function createDefaultWindows(
   locale?: ScenarioLocale
 ): Record<AppId, WindowState> {
@@ -177,7 +242,7 @@ function createDefaultWindows(
       isOpen: true,
       isMinimized: false,
       isMaximized: false,
-      zIndex: 12,
+      zIndex: 23,
       position: { x: 96, y: 40 },
       size: { width: 820, height: 540 },
     },
@@ -187,7 +252,7 @@ function createDefaultWindows(
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
-      zIndex: 11,
+      zIndex: 21,
       position: { x: 148, y: 64 },
       size: { width: 860, height: 550 },
     },
@@ -197,7 +262,7 @@ function createDefaultWindows(
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
-      zIndex: 10,
+      zIndex: 20,
       position: { x: 204, y: 84 },
       size: { width: 900, height: 560 },
     },
@@ -207,7 +272,7 @@ function createDefaultWindows(
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
-      zIndex: 11,
+      zIndex: 22,
       position: { x: 260, y: 96 },
       size: { width: 680, height: 480 },
     },
@@ -217,7 +282,7 @@ function createDefaultWindows(
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
-      zIndex: 13,
+      zIndex: 24,
       position: { x: 300, y: 44 },
       size: { width: 720, height: 540 },
     },
@@ -365,6 +430,8 @@ export interface OsState {
   // Mail
   emails: EmailMessage[];
   activeEmailId: string | null;
+  sendingEmailChoice: { emailId: string; choiceIndex: number; text: string } | null;
+  mailSyncing: boolean;
 
   // File Explorer
   files: VirtualFile[];
@@ -465,6 +532,58 @@ export const useOsStore = create<OsState>((set, get) => {
     }));
   }
 
+  function showDesktopToast(item: ToastNotification, token: number) {
+    if (token !== sessionToken) return;
+    if (!get().muted) {
+      playNotificationChime(
+        item.appId === 'mail'
+          ? 'email'
+          : item.appId === 'explorer' || item.appId === 'notes'
+            ? 'file'
+            : 'chat'
+      );
+    }
+
+    set((state) => ({
+      toasts: [...state.toasts, item].slice(-MAX_VISIBLE_TOASTS),
+    }));
+
+    window.setTimeout(() => {
+      if (token !== sessionToken) return;
+      set((state) => ({
+        toasts: state.toasts.filter((t) => t.id !== item.id),
+      }));
+    }, TOAST_DURATION_MS);
+  }
+
+  async function processToastQueue(token: number) {
+    if (toastQueueRunning) return;
+    toastQueueRunning = true;
+
+    try {
+      while (pendingToastQueue.length > 0) {
+        if (token !== sessionToken) return;
+
+        const elapsed = Date.now() - lastToastShownAt;
+        if (lastToastShownAt > 0 && elapsed < TOAST_STAGGER_MS && !get().instantTyping) {
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, TOAST_STAGGER_MS - elapsed)
+          );
+          if (token !== sessionToken) return;
+        }
+
+        const nextItem = pendingToastQueue.shift();
+        if (!nextItem) break;
+        lastToastShownAt = Date.now();
+        showDesktopToast(nextItem, token);
+      }
+    } finally {
+      if (token === sessionToken) {
+        toastQueueRunning = false;
+      }
+    }
+  }
+
   function pushNotification(
     appId: AppId,
     title: string,
@@ -482,28 +601,17 @@ export const useOsStore = create<OsState>((set, get) => {
       actionTarget,
     };
 
-    if (!get().muted) {
-      playNotificationChime(
-        appId === 'mail'
-          ? 'email'
-          : appId === 'explorer' || appId === 'notes'
-            ? 'file'
-            : 'chat'
-      );
-    }
-
     set((state) => ({
       notifications: [item, ...state.notifications].slice(0, 30),
-      toasts: [...state.toasts, item].slice(-3),
     }));
 
-    const capturedToken = sessionToken;
-    window.setTimeout(() => {
-      if (capturedToken !== sessionToken) return;
-      set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== item.id),
-      }));
-    }, 4500);
+    if (get().instantTyping) {
+      showDesktopToast(item, sessionToken);
+      return;
+    }
+
+    pendingToastQueue.push(item);
+    void processToastQueue(sessionToken);
   }
 
   function upsertFile(
@@ -644,8 +752,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
     storyInstance.state.LoadJson(saved.inkStateJson);
     sessionToken += 1;
-    dispatchQueue.length = 0;
-    queueRunning = false;
+    resetTransientQueues();
     pausedByContinueHook = Boolean(saved.pausedByContinueHook);
 
     const contacts = Array.isArray(saved.contacts) && saved.contacts.length > 0
@@ -697,7 +804,7 @@ export const useOsStore = create<OsState>((set, get) => {
       isLoading: false,
       windows: createDefaultWindows(manifest.locale),
       focusedApp: 'messages',
-      nextZIndex: 14,
+      nextZIndex: 25,
       toasts: [],
       notifications: [],
       typingContactId: null,
@@ -710,6 +817,8 @@ export const useOsStore = create<OsState>((set, get) => {
       unreadChatCounts: saved.unreadChatCounts ?? {},
       emails: saved.emails,
       activeEmailId: null,
+      sendingEmailChoice: null,
+      mailSyncing: false,
       files: saved.files,
       selectedFolder: 'Documents',
       selectedFileId: saved.files[0]?.id ?? null,
@@ -855,6 +964,7 @@ export const useOsStore = create<OsState>((set, get) => {
   async function processDispatchQueue(token: number) {
     if (queueRunning) return;
     queueRunning = true;
+    let lastBeatKind: DispatchBeat['kind'] | null = null;
 
     try {
       while (dispatchQueue.length > 0) {
@@ -862,6 +972,26 @@ export const useOsStore = create<OsState>((set, get) => {
         const beat = dispatchQueue.shift()!;
 
         switch (beat.kind) {
+          case 'wait': {
+            if (!get().instantTyping && beat.ms > 0) {
+              if (beat.showMailSync) {
+                const syncMs = Math.min(EMAIL_SYNC_PULSE_MS, beat.ms);
+                const quietMs = beat.ms - syncMs;
+                if (quietMs > 0) {
+                  await new Promise((resolve) => window.setTimeout(resolve, quietMs));
+                  if (token !== sessionToken) return;
+                }
+                set({ mailSyncing: true });
+                await new Promise((resolve) => window.setTimeout(resolve, syncMs));
+                if (token !== sessionToken) return;
+                set({ mailSyncing: false });
+              } else {
+                await new Promise((resolve) => window.setTimeout(resolve, beat.ms));
+                if (token !== sessionToken) return;
+              }
+            }
+            break;
+          }
           case 'advance_time': {
             set((s) => ({ clockMinutes: s.clockMinutes + beat.minutes }));
             break;
@@ -937,6 +1067,12 @@ export const useOsStore = create<OsState>((set, get) => {
           case 'chat': {
             const delay = get().instantTyping ? 0 : beat.typingDelayMs;
             if (delay > 0) {
+              if (lastBeatKind === 'chat') {
+                await new Promise((resolve) =>
+                  window.setTimeout(resolve, CHAT_INTER_MESSAGE_GAP_MS)
+                );
+                if (token !== sessionToken) return;
+              }
               set({ typingContactId: beat.message.contactId });
               await new Promise((resolve) => window.setTimeout(resolve, delay));
               if (token !== sessionToken) return;
@@ -980,15 +1116,16 @@ export const useOsStore = create<OsState>((set, get) => {
             break;
           }
         }
+        lastBeatKind = beat.kind;
       }
       if (token === sessionToken) {
         persistSnapshot();
       }
     } finally {
       if (token === sessionToken) {
-        set({ typingContactId: null });
+        set({ typingContactId: null, mailSyncing: false });
+        queueRunning = false;
       }
-      queueRunning = false;
     }
   }
 
@@ -1038,7 +1175,10 @@ export const useOsStore = create<OsState>((set, get) => {
     return true;
   }
 
-  function drainStory() {
+  function drainStory(opts?: {
+    afterPlayerChat?: boolean;
+    afterEmailReply?: boolean;
+  }) {
     if (!storyInstance) return;
 
     let currentChannel: Channel = get().activeChannel;
@@ -1049,6 +1189,9 @@ export const useOsStore = create<OsState>((set, get) => {
     let lastEmailSenderId: string | null = null;
     let shouldPauseForContinueHook = false;
     let pendingInputForBeat: PendingChatInput | null = null;
+    let reactionPausePending = Boolean(opts?.afterPlayerChat);
+    let emailReplyDelayPending = Boolean(opts?.afterEmailReply);
+    let hasActiveEmailDraftInBeat = false;
 
     const maxSteps = 200;
     let steps = 0;
@@ -1072,6 +1215,69 @@ export const useOsStore = create<OsState>((set, get) => {
       }
       if (line || rawTags.length > 0) {
         appendDebugLog('ink_line', line || '(tag-only beat)', { tags: rawTags });
+      }
+
+      if (parsed.channel) {
+        currentChannel = parsed.channel;
+      }
+      if (parsed.sender) {
+        currentSenderId = parsed.sender;
+      }
+
+      const hasEmailContent =
+        currentChannel === 'email' &&
+        Boolean(
+          line ||
+            interpolatedSubject ||
+            parsed.attachments.length > 0 ||
+            parsed.flagEmail
+        );
+      const emailSenderChanged =
+        currentChannel === 'email' &&
+        lastEmailSenderId !== null &&
+        lastEmailSenderId !== currentSenderId;
+      const willStartNewEmail =
+        hasEmailContent &&
+        (Boolean(interpolatedSubject) ||
+          emailSenderChanged ||
+          (!hasActiveEmailDraftInBeat &&
+            (!get().activeEmailDraftId ||
+              !get().emails.some(
+                (e) =>
+                  e.id === get().activeEmailDraftId &&
+                  e.senderId === currentSenderId
+              ))));
+      const hasChatContent =
+        currentChannel === 'chat' &&
+        Boolean(parsed.voiceNote || parsed.attachments.length > 0 || line);
+
+      if (parsed.delayMs !== undefined) {
+        if (parsed.delayMs > 0) {
+          dispatchQueue.push({
+            kind: 'wait',
+            ms: parsed.delayMs,
+            showMailSync: willStartNewEmail,
+          });
+        }
+        reactionPausePending = false;
+        if (willStartNewEmail) {
+          emailReplyDelayPending = false;
+        }
+      } else if (willStartNewEmail) {
+        dispatchQueue.push({
+          kind: 'wait',
+          ms: emailReplyDelayPending
+            ? EMAIL_REPLY_DELAY_MS
+            : EMAIL_ARRIVAL_DELAY_MS,
+          showMailSync: true,
+        });
+        emailReplyDelayPending = false;
+      } else if (reactionPausePending && hasChatContent) {
+        dispatchQueue.push({
+          kind: 'wait',
+          ms: CHAT_REACTION_PAUSE_MS,
+        });
+        reactionPausePending = false;
       }
 
       if (parsed.setTimeMinutes !== undefined) {
@@ -1106,13 +1312,6 @@ export const useOsStore = create<OsState>((set, get) => {
         });
       }
 
-      if (parsed.channel) {
-        currentChannel = parsed.channel;
-      }
-      if (parsed.sender) {
-        currentSenderId = parsed.sender;
-      }
-
       // Standalone file unlocks
       for (const unlock of parsed.fileUnlocks) {
         dispatchQueue.push({
@@ -1136,6 +1335,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
       if (currentChannel === 'chat') {
         lastEmailSenderId = null;
+        hasActiveEmailDraftInBeat = false;
 
         // Register attachments in File Explorer via Unified Media Routing
         for (const attPath of parsed.attachments) {
@@ -1157,7 +1357,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
           dispatchQueue.push({
             kind: 'chat',
-            typingDelayMs: parsed.typingDelayMs ?? 550,
+            typingDelayMs: parsed.typingDelayMs ?? CHAT_VOICE_NOTE_DELAY_MS,
             message: {
               id: makeId('msg'),
               contactId: currentSenderId,
@@ -1177,7 +1377,7 @@ export const useOsStore = create<OsState>((set, get) => {
           if (line) {
             dispatchQueue.push({
               kind: 'chat',
-              typingDelayMs: parsed.typingDelayMs ?? 600,
+              typingDelayMs: parsed.typingDelayMs ?? computeChatTypingDelay(line),
               message: {
                 id: makeId('msg'),
                 contactId: currentSenderId,
@@ -1191,7 +1391,9 @@ export const useOsStore = create<OsState>((set, get) => {
           for (const attPath of parsed.attachments) {
             dispatchQueue.push({
               kind: 'chat',
-              typingDelayMs: line ? 350 : parsed.typingDelayMs ?? 550,
+              typingDelayMs: line
+                ? CHAT_ATTACHMENT_DELAY_MS
+                : (parsed.typingDelayMs ?? CHAT_ATTACHMENT_DELAY_MS),
               message: {
                 id: makeId('msg'),
                 contactId: currentSenderId,
@@ -1206,7 +1408,7 @@ export const useOsStore = create<OsState>((set, get) => {
         } else if (line) {
           dispatchQueue.push({
             kind: 'chat',
-            typingDelayMs: parsed.typingDelayMs ?? 600,
+            typingDelayMs: parsed.typingDelayMs ?? computeChatTypingDelay(line),
             message: {
               id: makeId('msg'),
               contactId: currentSenderId,
@@ -1219,16 +1421,10 @@ export const useOsStore = create<OsState>((set, get) => {
         }
       } else {
         // Email channel
-        const emailSenderChanged =
-          lastEmailSenderId !== null && lastEmailSenderId !== currentSenderId;
         lastEmailSenderId = currentSenderId;
 
-        if (
-          line ||
-          interpolatedSubject ||
-          parsed.attachments.length > 0 ||
-          parsed.flagEmail
-        ) {
+        if (hasEmailContent) {
+          hasActiveEmailDraftInBeat = true;
           dispatchQueue.push({
             kind: 'email_line',
             senderId: currentSenderId,
@@ -1376,7 +1572,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
     windows: createDefaultWindows(),
     focusedApp: 'messages',
-    nextZIndex: 14,
+    nextZIndex: 25,
     startMenuOpen: false,
     notificationsOpen: false,
     toasts: [],
@@ -1396,6 +1592,8 @@ export const useOsStore = create<OsState>((set, get) => {
 
     emails: [],
     activeEmailId: null,
+    sendingEmailChoice: null,
+    mailSyncing: false,
 
     files: [],
     selectedFolder: 'Documents',
@@ -1521,8 +1719,7 @@ export const useOsStore = create<OsState>((set, get) => {
       await submitLogout();
       localStorage.removeItem(ACTIVE_SCENARIO_KEY);
       sessionToken += 1;
-      dispatchQueue.length = 0;
-      queueRunning = false;
+      resetTransientQueues();
       pausedByContinueHook = false;
       storyInstance = null;
 
@@ -1534,6 +1731,8 @@ export const useOsStore = create<OsState>((set, get) => {
         startMenuOpen: false,
         notificationsOpen: false,
         typingContactId: null,
+        sendingEmailChoice: null,
+        mailSyncing: false,
         toasts: [],
       });
     },
@@ -1541,8 +1740,7 @@ export const useOsStore = create<OsState>((set, get) => {
     openScenarioSelector: (preselectId) => {
       localStorage.removeItem(ACTIVE_SCENARIO_KEY);
       sessionToken += 1;
-      dispatchQueue.length = 0;
-      queueRunning = false;
+      resetTransientQueues();
 
       set((state) => ({
         appPhase: 'select_scenario',
@@ -1551,14 +1749,15 @@ export const useOsStore = create<OsState>((set, get) => {
         startMenuOpen: false,
         notificationsOpen: false,
         typingContactId: null,
+        sendingEmailChoice: null,
+        mailSyncing: false,
         toasts: [],
       }));
     },
 
     loadScenario: async (scenarioId, opts) => {
       sessionToken += 1;
-      dispatchQueue.length = 0;
-      queueRunning = false;
+      resetTransientQueues();
       pausedByContinueHook = false;
 
       set({
@@ -1567,6 +1766,8 @@ export const useOsStore = create<OsState>((set, get) => {
         startMenuOpen: false,
         notificationsOpen: false,
         typingContactId: null,
+        sendingEmailChoice: null,
+        mailSyncing: false,
       });
 
       try {
@@ -1684,7 +1885,7 @@ export const useOsStore = create<OsState>((set, get) => {
           isLoading: false,
           windows: createDefaultWindows(manifest.locale),
           focusedApp: 'messages',
-          nextZIndex: 14,
+          nextZIndex: 25,
           toasts: [],
           notifications: [],
           clockMinutes: startMinutes,
@@ -1696,6 +1897,8 @@ export const useOsStore = create<OsState>((set, get) => {
           unreadChatCounts: {},
           emails: [],
           activeEmailId: null,
+          sendingEmailChoice: null,
+          mailSyncing: false,
           files: initialFiles,
           selectedFolder: 'Documents',
           selectedFileId: initialFiles[0]?.id ?? null,
@@ -1762,16 +1965,11 @@ export const useOsStore = create<OsState>((set, get) => {
       const shouldPersistUnreadNotes =
         appId === 'notes' && get().unreadNotesCount > 0;
       set((state) => {
-        const nextZ = state.nextZIndex + 1;
-        const nextWindows = {
-          ...state.windows,
-          [appId]: {
-            ...state.windows[appId],
-            isOpen: true,
-            isMinimized: false,
-            zIndex: nextZ,
-          },
-        };
+        const { windows: nextWindows, nextZIndex: nextZ } = bringWindowToFront(
+          state.windows,
+          appId,
+          { isOpen: true, isMinimized: false }
+        );
 
         let nextUnread = state.unreadChatCounts;
         if (appId === 'messages' && state.activeContactId) {
@@ -1821,18 +2019,14 @@ export const useOsStore = create<OsState>((set, get) => {
 
     toggleMaximizeApp: (appId) => {
       set((state) => {
-        const nextZ = state.nextZIndex + 1;
         const win = state.windows[appId];
+        const { windows: nextWindows, nextZIndex: nextZ } = bringWindowToFront(
+          state.windows,
+          appId,
+          { isMaximized: !win.isMaximized, isMinimized: false }
+        );
         return {
-          windows: {
-            ...state.windows,
-            [appId]: {
-              ...win,
-              isMaximized: !win.isMaximized,
-              isMinimized: false,
-              zIndex: nextZ,
-            },
-          },
+          windows: nextWindows,
           focusedApp: appId,
           nextZIndex: nextZ,
         };
@@ -1847,7 +2041,11 @@ export const useOsStore = create<OsState>((set, get) => {
       set((state) => {
         const win = state.windows[appId];
         if (!win.isOpen) return state;
-        const nextZ = state.nextZIndex + 1;
+        const { windows: nextWindows, nextZIndex: nextZ } = bringWindowToFront(
+          state.windows,
+          appId,
+          { isMinimized: false }
+        );
 
         let nextUnread = state.unreadChatCounts;
         if (appId === 'messages' && state.activeContactId) {
@@ -1861,10 +2059,7 @@ export const useOsStore = create<OsState>((set, get) => {
           appId === 'notes' ? 0 : state.unreadNotesCount;
 
         return {
-          windows: {
-            ...state.windows,
-            [appId]: { ...win, isMinimized: false, zIndex: nextZ },
-          },
+          windows: nextWindows,
           focusedApp: appId,
           nextZIndex: nextZ,
           startMenuOpen: false,
@@ -2071,34 +2266,74 @@ export const useOsStore = create<OsState>((set, get) => {
       const choice = get().activeChoices.find((c) => c.index === choiceIndex);
       if (!choice) return;
 
+      if (choice.channel === 'email') {
+        const commitEmailChoice = () => {
+          if (!storyInstance) return;
+          const timestamp = formatClock24(get().clockMinutes);
+          if (!choice.silent) {
+            set((s) => ({
+              emails: s.emails.map((e) =>
+                e.id === choice.targetId
+                  ? {
+                      ...e,
+                      read: true,
+                      replies: [...e.replies, { text: choice.text, sentAt: timestamp }],
+                    }
+                  : e
+              ),
+              sendingEmailChoice: null,
+            }));
+          } else {
+            set({ sendingEmailChoice: null });
+          }
+
+          appendDebugLog('choice', `Selected [${choice.channel}]: "${choice.text}"`);
+          try {
+            storyInstance.ChooseChoiceIndex(choiceIndex);
+            drainStory({ afterEmailReply: true });
+          } catch (err) {
+            appendDebugLog(
+              'error',
+              `Choice execution failed: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        };
+
+        set({ activeChoices: [], pendingInput: null });
+        if (get().instantTyping) {
+          commitEmailChoice();
+          return;
+        }
+
+        const capturedToken = sessionToken;
+        set({
+          sendingEmailChoice: {
+            emailId: choice.targetId,
+            choiceIndex,
+            text: choice.text,
+          },
+        });
+        window.setTimeout(() => {
+          if (capturedToken !== sessionToken) return;
+          commitEmailChoice();
+        }, EMAIL_SEND_ANIMATION_MS);
+        return;
+      }
+
       const timestamp = formatClock24(get().clockMinutes);
 
       if (!choice.silent) {
-        if (choice.channel === 'chat') {
-          const playerBubble: ChatMessage = {
-            id: makeId('msg'),
-            contactId: choice.targetId,
-            sender: 'player',
-            kind: 'text',
-            text: choice.text,
-            timestamp,
-          };
-          set((s) => ({
-            chatMessages: [...s.chatMessages, playerBubble],
-          }));
-        } else {
-          set((s) => ({
-            emails: s.emails.map((e) =>
-              e.id === choice.targetId
-                ? {
-                  ...e,
-                  read: true,
-                  replies: [...e.replies, { text: choice.text, sentAt: timestamp }],
-                }
-                : e
-            ),
-          }));
-        }
+        const playerBubble: ChatMessage = {
+          id: makeId('msg'),
+          contactId: choice.targetId,
+          sender: 'player',
+          kind: 'text',
+          text: choice.text,
+          timestamp,
+        };
+        set((s) => ({
+          chatMessages: [...s.chatMessages, playerBubble],
+        }));
       }
 
       appendDebugLog('choice', `Selected [${choice.channel}]: "${choice.text}"`);
@@ -2106,7 +2341,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
       try {
         storyInstance.ChooseChoiceIndex(choiceIndex);
-        drainStory();
+        drainStory({ afterPlayerChat: true });
       } catch (err) {
         appendDebugLog(
           'error',
@@ -2176,7 +2411,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
       try {
         storyInstance.ChoosePathString(input.targetKnot);
-        drainStory();
+        drainStory({ afterPlayerChat: true });
       } catch (err) {
         appendDebugLog(
           'error',
@@ -2290,14 +2525,15 @@ export const useOsStore = create<OsState>((set, get) => {
     jumpToKnot: (knotName) => {
       if (!storyInstance || !knotName) return;
       sessionToken += 1;
-      dispatchQueue.length = 0;
-      queueRunning = false;
+      resetTransientQueues();
       pausedByContinueHook = false;
 
       set({
         activeChoices: [],
         pendingInput: null,
         typingContactId: null,
+        sendingEmailChoice: null,
+        mailSyncing: false,
       });
 
       appendDebugLog('director', `Jumped to knot: ${knotName}`);

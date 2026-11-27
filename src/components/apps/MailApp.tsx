@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Flag,
   Inbox,
+  Loader2,
   MailOpen,
   Paperclip,
   Reply,
@@ -20,6 +21,8 @@ export function MailApp() {
   const activeEmailId = useOsStore((s) => s.activeEmailId);
   const contacts = useOsStore((s) => s.contacts);
   const activeChoices = useOsStore((s) => s.activeChoices);
+  const sendingEmailChoice = useOsStore((s) => s.sendingEmailChoice);
+  const mailSyncing = useOsStore((s) => s.mailSyncing);
   const manifest = useOsStore((s) => s.manifest);
   const templateVars = useOsStore((s) => s.templateVars);
 
@@ -79,11 +82,19 @@ export function MailApp() {
             <Inbox className="h-4 w-4 text-[#0067c0]" />
             {t.mail.inbox}
           </div>
-          {unreadCount > 0 && (
-            <span className="rounded bg-[#e5f1fb] px-2 py-0.5 text-[10px] font-semibold text-[#005aa8]">
-              {t.mail.unreadBadge(unreadCount)}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {mailSyncing && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                <Loader2 className="h-3 w-3 animate-spin text-[#0067c0]" />
+                {t.mail.syncingInbox}
+              </span>
+            )}
+            {unreadCount > 0 && (
+              <span className="rounded bg-[#e5f1fb] px-2 py-0.5 text-[10px] font-semibold text-[#005aa8]">
+                {t.mail.unreadBadge(unreadCount)}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Search & Filter Controls */}
@@ -322,7 +333,17 @@ export function MailApp() {
             </div>
 
             {/* Multiple-Choice Email Reply Actions */}
-            {emailChoices.length > 0 && (
+            {sendingEmailChoice && sendingEmailChoice.emailId === activeEmail.id ? (
+              <footer className="border-t border-slate-200 bg-[#f8f9fa] px-6 py-3.5">
+                <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#005aa8]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#0067c0]" />
+                  {t.mail.sendingReply}
+                </div>
+                <div className="rounded border border-[#cde0f5] bg-white/80 px-3.5 py-2 text-xs text-slate-500">
+                  {sendingEmailChoice.text}
+                </div>
+              </footer>
+            ) : emailChoices.length > 0 && (
               <footer className="border-t border-slate-200 bg-[#f8f9fa] px-6 py-3.5">
                 <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   <Reply className="h-3.5 w-3.5 text-[#0067c0]" />

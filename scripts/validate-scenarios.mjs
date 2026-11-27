@@ -100,7 +100,8 @@ function scanInkTags(inkSource) {
           key === 'CONTACT_STATUS' ||
           key === 'EVENT_HOOK' ||
           key === 'NOTE_ADD' ||
-          key === 'INPUT'
+          key === 'INPUT' ||
+          key === 'DELAY'
         ) {
           tagErrors.push({ lineNum, message: `Empty value in # ${key}` });
         }
@@ -133,6 +134,13 @@ function scanInkTags(inkSource) {
           tagErrors.push({
             lineNum,
             message: `Invalid # SET_TIME "${value}" (expected 24-hour HH:MM)`,
+          });
+        }
+      } else if (key === 'DELAY') {
+        if (!/^\d+(?:\.\d+)?\s*(?:ms|s)?$/i.test(value)) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # DELAY "${value}" (expected non-negative ms or seconds like 4000 or 4s)`,
           });
         }
       } else if (key === 'ATTACHMENT' || key === 'FILE_UNLOCK') {
