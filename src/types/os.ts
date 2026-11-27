@@ -38,6 +38,7 @@ export interface ToastNotification {
   body: string;
   timestamp: string;
   read: boolean;
+  groupCount?: number;
   actionTarget?: {
     contactId?: string;
     emailId?: string;

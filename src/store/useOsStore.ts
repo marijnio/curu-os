@@ -78,7 +78,8 @@ const CHAT_VOICE_NOTE_DELAY_MS = 1500;
 const CHAT_ATTACHMENT_DELAY_MS = 850;
 
 const TOAST_STAGGER_MS = 1400;
-const TOAST_DURATION_MS = 5000;
+const TOAST_DURATION_MS = 8000;
+const TOAST_RESUME_GRACE_MS = 1500;
 const MAX_VISIBLE_TOASTS = 3;
 
 const EMAIL_SEND_ANIMATION_MS = 750;
@@ -123,10 +124,36 @@ type DispatchBeat =
   | { kind: 'set_choices'; choices: ActiveChoice[] }
   | { kind: 'set_input'; input: PendingChatInput | null };
 
+interface ToastTimerEntry {
+  remainingMs: number;
+  startedAt: number | null;
+  timeoutId: number | null;
+}
+
 const dispatchQueue: DispatchBeat[] = [];
 const pendingToastQueue: ToastNotification[] = [];
+const toastTimers = new Map<string, ToastTimerEntry>();
 let toastQueueRunning = false;
 let lastToastShownAt = 0;
+let toastsPaused = false;
+
+function clearToastTimer(id: string): void {
+  const entry = toastTimers.get(id);
+  if (entry?.timeoutId !== null && entry?.timeoutId !== undefined) {
+    window.clearTimeout(entry.timeoutId);
+  }
+  toastTimers.delete(id);
+}
+
+function clearAllToastTimers(): void {
+  for (const entry of toastTimers.values()) {
+    if (entry.timeoutId !== null) {
+      window.clearTimeout(entry.timeoutId);
+    }
+  }
+  toastTimers.clear();
+  toastsPaused = false;
+}
 
 function resetTransientQueues(): void {
   dispatchQueue.length = 0;
@@ -134,6 +161,7 @@ function resetTransientQueues(): void {
   pendingToastQueue.length = 0;
   toastQueueRunning = false;
   lastToastShownAt = 0;
+  clearAllToastTimers();
 }
 
 export interface PersistedSnapshot {
@@ -480,6 +508,7 @@ export interface OsState {
   toggleStartMenu: (open?: boolean) => void;
   toggleNotifications: (open?: boolean) => void;
   dismissToast: (id: string) => void;
+  setToastsPaused: (paused: boolean) => void;
   markAllNotificationsRead: () => void;
   clickNotification: (notification: ToastNotification) => void;
   toggleMuted: () => void;
@@ -532,28 +561,73 @@ export const useOsStore = create<OsState>((set, get) => {
     }));
   }
 
+  function playChimeForApp(appId: AppId) {
+    playNotificationChime(
+      appId === 'mail'
+        ? 'email'
+        : appId === 'explorer' || appId === 'notes'
+          ? 'file'
+          : 'chat'
+    );
+  }
+
+  function removeToastAndPump(id: string, token: number) {
+    clearToastTimer(id);
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    }));
+    if (get().toasts.length === 0) {
+      toastsPaused = false;
+    }
+    if (
+      token === sessionToken &&
+      pendingToastQueue.length > 0 &&
+      get().toasts.length < MAX_VISIBLE_TOASTS
+    ) {
+      void processToastQueue(token);
+    }
+  }
+
+  function startToastTimer(id: string, durationMs: number, token: number) {
+    clearToastTimer(id);
+    if (toastsPaused) {
+      toastTimers.set(id, {
+        remainingMs: durationMs,
+        startedAt: null,
+        timeoutId: null,
+      });
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      if (token !== sessionToken) return;
+      removeToastAndPump(id, token);
+    }, durationMs);
+    toastTimers.set(id, {
+      remainingMs: durationMs,
+      startedAt: Date.now(),
+      timeoutId,
+    });
+  }
+
   function showDesktopToast(item: ToastNotification, token: number) {
     if (token !== sessionToken) return;
     if (!get().muted) {
-      playNotificationChime(
-        item.appId === 'mail'
-          ? 'email'
-          : item.appId === 'explorer' || item.appId === 'notes'
-            ? 'file'
-            : 'chat'
-      );
+      playChimeForApp(item.appId);
+    }
+
+    const currentToasts = get().toasts;
+    if (currentToasts.length >= MAX_VISIBLE_TOASTS) {
+      const overflowCount = currentToasts.length - MAX_VISIBLE_TOASTS + 1;
+      for (const dropped of currentToasts.slice(0, overflowCount)) {
+        clearToastTimer(dropped.id);
+      }
     }
 
     set((state) => ({
       toasts: [...state.toasts, item].slice(-MAX_VISIBLE_TOASTS),
     }));
 
-    window.setTimeout(() => {
-      if (token !== sessionToken) return;
-      set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== item.id),
-      }));
-    }, TOAST_DURATION_MS);
+    startToastTimer(item.id, TOAST_DURATION_MS, token);
   }
 
   async function processToastQueue(token: number) {
@@ -563,6 +637,7 @@ export const useOsStore = create<OsState>((set, get) => {
     try {
       while (pendingToastQueue.length > 0) {
         if (token !== sessionToken) return;
+        if (get().toasts.length >= MAX_VISIBLE_TOASTS) return;
 
         const elapsed = Date.now() - lastToastShownAt;
         if (lastToastShownAt > 0 && elapsed < TOAST_STAGGER_MS && !get().instantTyping) {
@@ -570,6 +645,7 @@ export const useOsStore = create<OsState>((set, get) => {
             window.setTimeout(resolve, TOAST_STAGGER_MS - elapsed)
           );
           if (token !== sessionToken) return;
+          if (get().toasts.length >= MAX_VISIBLE_TOASTS) return;
         }
 
         const nextItem = pendingToastQueue.shift();
@@ -604,6 +680,42 @@ export const useOsStore = create<OsState>((set, get) => {
     set((state) => ({
       notifications: [item, ...state.notifications].slice(0, 30),
     }));
+
+    const contactId = actionTarget?.contactId;
+    if (appId === 'messages' && contactId) {
+      const existingVisible = get().toasts.find(
+        (t) => t.appId === 'messages' && t.actionTarget?.contactId === contactId
+      );
+      if (existingVisible) {
+        set((state) => ({
+          toasts: state.toasts.map((t) =>
+            t.id === existingVisible.id
+              ? {
+                  ...t,
+                  body: item.body,
+                  timestamp: item.timestamp,
+                  groupCount: (t.groupCount ?? 1) + 1,
+                }
+              : t
+          ),
+        }));
+        startToastTimer(existingVisible.id, TOAST_DURATION_MS, sessionToken);
+        if (!get().muted) {
+          playChimeForApp('messages');
+        }
+        return;
+      }
+
+      const existingQueued = pendingToastQueue.find(
+        (t) => t.appId === 'messages' && t.actionTarget?.contactId === contactId
+      );
+      if (existingQueued) {
+        existingQueued.body = item.body;
+        existingQueued.timestamp = item.timestamp;
+        existingQueued.groupCount = (existingQueued.groupCount ?? 1) + 1;
+        return;
+      }
+    }
 
     if (get().instantTyping) {
       showDesktopToast(item, sessionToken);
@@ -2111,9 +2223,39 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     dismissToast: (id) => {
-      set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== id),
-      }));
+      removeToastAndPump(id, sessionToken);
+    },
+
+    setToastsPaused: (paused) => {
+      if (toastsPaused === paused) return;
+      toastsPaused = paused;
+      const now = Date.now();
+
+      if (paused) {
+        for (const entry of toastTimers.values()) {
+          if (entry.timeoutId !== null) {
+            window.clearTimeout(entry.timeoutId);
+            entry.timeoutId = null;
+          }
+          const elapsed = entry.startedAt !== null ? now - entry.startedAt : 0;
+          entry.remainingMs = Math.max(TOAST_RESUME_GRACE_MS, entry.remainingMs - elapsed);
+          entry.startedAt = null;
+        }
+      } else {
+        const token = sessionToken;
+        for (const [id, entry] of toastTimers.entries()) {
+          if (entry.timeoutId !== null) continue;
+          const waitMs = Math.max(TOAST_RESUME_GRACE_MS, entry.remainingMs);
+          entry.startedAt = now;
+          entry.timeoutId = window.setTimeout(() => {
+            if (token !== sessionToken) return;
+            removeToastAndPump(id, token);
+          }, waitMs);
+        }
+        if (pendingToastQueue.length > 0 && get().toasts.length < MAX_VISIBLE_TOASTS) {
+          void processToastQueue(token);
+        }
+      }
     },
 
     markAllNotificationsRead: () => {
@@ -2123,6 +2265,7 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     clickNotification: (notification) => {
+      clearToastTimer(notification.id);
       set((state) => ({
         notifications: state.notifications.map((n) =>
           n.id === notification.id ? { ...n, read: true } : n
@@ -2130,6 +2273,12 @@ export const useOsStore = create<OsState>((set, get) => {
         toasts: state.toasts.filter((t) => t.id !== notification.id),
         notificationsOpen: false,
       }));
+      if (get().toasts.length === 0) {
+        toastsPaused = false;
+      }
+      if (pendingToastQueue.length > 0 && get().toasts.length < MAX_VISIBLE_TOASTS) {
+        void processToastQueue(sessionToken);
+      }
 
       if (notification.actionTarget?.filePath) {
         get().openFileInExplorer(notification.actionTarget.filePath);

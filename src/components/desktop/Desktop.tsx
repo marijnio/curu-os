@@ -48,9 +48,18 @@ export function Desktop() {
   const toggleNotifications = useOsStore((s) => s.toggleNotifications);
   const clickNotification = useOsStore((s) => s.clickNotification);
   const dismissToast = useOsStore((s) => s.dismissToast);
+  const setToastsPaused = useOsStore((s) => s.setToastsPaused);
   const resetProgress = useOsStore((s) => s.resetProgress);
 
   const [selectedIcon, setSelectedIcon] = useState<AppId | null>(null);
+
+  useEffect(() => {
+    if (toasts.length === 0) {
+      setToastsPaused(false);
+    }
+  }, [toasts.length, setToastsPaused]);
+
+  useEffect(() => () => setToastsPaused(false), [setToastsPaused]);
 
   // Sync browser tab title with scenario manifest / optional theme
   useEffect(() => {
@@ -252,7 +261,11 @@ export function Desktop() {
 
       {/* Flat Windows-style Toast Notifications */}
       {toasts.length > 0 && (
-        <div className="fixed right-3 bottom-12 z-[1200] flex w-80 flex-col gap-2">
+        <div
+          onMouseEnter={() => setToastsPaused(true)}
+          onMouseLeave={() => setToastsPaused(false)}
+          className="fixed right-3 bottom-12 z-[1200] flex w-80 flex-col gap-2"
+        >
           {toasts.map((toast) => (
             <div
               key={toast.id}
@@ -262,12 +275,17 @@ export function Desktop() {
               }}
               className="curu-toast-enter flex items-start justify-between gap-2 rounded-[2px] border border-[#3a3f4b] bg-[#1f2228] p-3 text-slate-100 shadow-xl transition-colors hover:border-[#4ca3dd] cursor-pointer"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#4ca3dd]" />
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#4ca3dd]" />
                   <span className="truncate text-xs font-semibold text-white">
                     {toast.title}
                   </span>
+                  {(toast.groupCount ?? 1) > 1 && (
+                    <span className="shrink-0 rounded-full bg-[#2a3950] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[#7cc4f5]">
+                      {t.notifications.groupedMessages(toast.groupCount!)}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-300">
                   {toast.body}

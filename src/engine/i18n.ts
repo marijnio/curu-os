@@ -149,6 +149,7 @@ export interface UiTranslations {
     voiceNotePreview: (duration: string) => string;
     sentAttachment: string;
     newNoteTitle: string;
+    groupedMessages: (count: number) => string;
   };
   shared: {
     open: string;
@@ -354,6 +355,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       voiceNotePreview: (duration) => `Voice note (${duration})`,
       sentAttachment: 'Sent an attachment',
       newNoteTitle: 'New Note Added',
+      groupedMessages: (count) => `${count} messages`,
     },
     shared: {
       open: 'Open',
@@ -560,6 +562,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       voiceNotePreview: (duration) => `Spraakbericht (${duration})`,
       sentAttachment: 'Bijlage verzonden',
       newNoteTitle: 'Nieuwe notitie toegevoegd',
+      groupedMessages: (count) => `${count} berichten`,
     },
     shared: {
       open: 'Openen',
