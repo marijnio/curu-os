@@ -2,11 +2,17 @@
   "name": "curu-os",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/q-marijn/curu-os.git"
+  },
   "type": "module",
   "bin": {
     "curu-os": "./bin/curu-os.mjs"
   },
   "files": [
+    "LICENSE",
     "bin",
     "scripts",
     "src",

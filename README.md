@@ -121,3 +121,9 @@ Curu-OS is packaged so you can edit `.ink` scripts, Markdown documents, images, 
    ```
 3. Open `http://<host>:8080`.
 4. Any edits you make inside `./scenarios/` (including `story.ink`, `docs/*.md`, or adding new scenario folders to `scenarios/index.json`) take effect on browser refresh because Curu-OS compiles `story.ink` in-browser and Nginx serves `/scenarios/` with `no-cache`.
+
+---
+
+## License
+
+Curu-OS is released under the [MIT License](LICENSE).
