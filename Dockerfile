@@ -10,6 +10,8 @@ RUN npm run build
 
 # Stage 2: Lightweight Nginx production runtime
 FROM nginx:alpine AS runner
+LABEL org.opencontainers.image.source="https://github.com/q-marijn/curu-os"
+LABEL org.opencontainers.image.description="Curu-OS narrative desktop simulation engine"
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 

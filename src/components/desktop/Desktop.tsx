@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bug,
@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import type { AppId } from '../../types/os';
+import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
 import { useOsStore } from '../../store/useOsStore';
 import { DesktopIcon } from './DesktopIcon';
 import { Window } from './Window';
@@ -23,6 +24,8 @@ import { DirectorInspector } from '../apps/DirectorInspector';
 export function Desktop() {
   const isLoading = useOsStore((s) => s.isLoading);
   const loadError = useOsStore((s) => s.loadError);
+  const scenarioId = useOsStore((s) => s.scenarioId);
+  const manifest = useOsStore((s) => s.manifest);
   const windows = useOsStore((s) => s.windows);
   const toasts = useOsStore((s) => s.toasts);
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
@@ -38,6 +41,14 @@ export function Desktop() {
   const resetProgress = useOsStore((s) => s.resetProgress);
 
   const [selectedIcon, setSelectedIcon] = useState<AppId | null>(null);
+
+  // Sync browser tab title with scenario manifest / optional theme
+  useEffect(() => {
+    const osName = manifest?.theme?.osName || 'Curu-OS';
+    document.title =
+      manifest?.theme?.windowTitle ||
+      (manifest?.title ? `${manifest.title} — ${osName}` : osName);
+  }, [manifest]);
 
   // Global Ctrl/Cmd + Shift + D shortcut to toggle Director Inspector
   useEffect(() => {
@@ -60,6 +71,16 @@ export function Desktop() {
   const totalMailUnread = emails.filter((e) => !e.read).length;
   const totalFilesUnread = files.filter((f) => !f.opened).length;
 
+  const wallpaperStyle: CSSProperties = {};
+  if (manifest?.theme?.wallpaperColor) {
+    wallpaperStyle.backgroundColor = manifest.theme.wallpaperColor;
+  }
+  if (manifest?.theme?.wallpaperImage && scenarioId) {
+    wallpaperStyle.backgroundImage = `url("${resolveScenarioAssetUrl(scenarioId, manifest.theme.wallpaperImage)}")`;
+    wallpaperStyle.backgroundSize = 'cover';
+    wallpaperStyle.backgroundPosition = 'center';
+  }
+
   return (
     <div
       onClick={() => {
@@ -67,6 +88,7 @@ export function Desktop() {
         toggleStartMenu(false);
         toggleNotifications(false);
       }}
+      style={wallpaperStyle}
       className="curu-wallpaper relative h-screen w-screen overflow-hidden"
     >
       {/* Desktop Shortcuts */}

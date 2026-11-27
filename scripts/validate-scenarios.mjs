@@ -1,0 +1,368 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  collectInkFiles,
+  compileInkFile,
+  resolveScenarioEntrypoints,
+  resolveScenariosDir,
+} from './compile-ink.mjs';
+
+const __filename = fileURLToPath(import.meta.url);
+
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.ogg', '.wav', '.m4a', '.webm']);
+
+function normalizeScenarioRelPath(rawPath) {
+  return rawPath.trim().replace(/^(\.\/|\/)+/, '').replace(/\\/g, '/');
+}
+
+function isAudioPath(relPath) {
+  const ext = path.extname(relPath).toLowerCase();
+  return AUDIO_EXTENSIONS.has(ext);
+}
+
+function isInsideDir(targetPath, rootDir) {
+  const resolvedRoot = path.resolve(rootDir);
+  const resolvedTarget = path.resolve(targetPath);
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + path.sep);
+}
+
+function checkAssetPath({
+  scenarioId,
+  scenarioDir,
+  relPath,
+  sourceLabel,
+  treatMissingAsWarning,
+  errors,
+  warnings,
+}) {
+  const normalized = normalizeScenarioRelPath(relPath);
+  if (!normalized) {
+    errors.push(`[${scenarioId}] Empty asset path in ${sourceLabel}`);
+    return;
+  }
+
+  const resolved = path.resolve(scenarioDir, normalized);
+  if (!isInsideDir(resolved, scenarioDir)) {
+    errors.push(`[${scenarioId}] Path escapes scenario directory in ${sourceLabel}: "${relPath}"`);
+    return;
+  }
+
+  if (!fs.existsSync(resolved)) {
+    const msg = `[${scenarioId}] Missing asset "${normalized}" referenced by ${sourceLabel}`;
+    if (treatMissingAsWarning || isAudioPath(normalized)) {
+      warnings.push(`${msg} (synthesized fallback audio will be used if audio)`);
+    } else {
+      errors.push(msg);
+    }
+  }
+}
+
+function scanInkTags(inkSource) {
+  const senders = new Set();
+  const assets = [];
+
+  const lines = inkSource.split(/\r?\n/);
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
+    const rawLine = lines[lineIdx];
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith('//')) continue;
+
+    // Strip inline // comments when not preceded by : (e.g. URLs)
+    const cleanLine = rawLine.replace(/(^|\s)\/\/.*$/, '');
+    const segments = cleanLine.split('#').slice(1);
+
+    for (let seg of segments) {
+      // On choice lines (`+ # CHANNEL: chat # SENDER: id [Choice text]`), strip choice bracket text
+      const bracketIdx = seg.indexOf('[');
+      if (bracketIdx !== -1 && (trimmed.startsWith('+') || trimmed.startsWith('*'))) {
+        seg = seg.slice(0, bracketIdx);
+      }
+
+      const normalizedTag = seg.replace(/\\\|/g, '|').trim();
+      if (!normalizedTag) continue;
+
+      const primary = normalizedTag.split('|')[0]?.trim() ?? '';
+      const colonIdx = primary.indexOf(':');
+      if (colonIdx === -1) continue;
+
+      const key = primary.slice(0, colonIdx).trim().toUpperCase();
+      const value = primary.slice(colonIdx + 1).trim();
+      if (!value) continue;
+
+      const lineNum = lineIdx + 1;
+
+      if (key === 'SENDER') {
+        senders.add(value);
+      } else if (key === 'ATTACHMENT' || key === 'FILE_UNLOCK') {
+        assets.push({ path: value, kind: key, lineNum });
+      } else if (key === 'VOICE_NOTE') {
+        assets.push({ path: value, kind: 'VOICE_NOTE', lineNum, isAudio: true });
+      } else if (key === 'EVENT_HOOK') {
+        const match = /^on_file_open:(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(value);
+        if (match?.[1]) {
+          assets.push({ path: match[1].trim(), kind: 'EVENT_HOOK', lineNum });
+        }
+      }
+    }
+  }
+
+  return { senders, assets };
+}
+
+export function validateScenarios(scenariosDir = resolveScenariosDir()) {
+  const resolvedDir = path.resolve(scenariosDir);
+  const errors = [];
+  const warnings = [];
+  let scenariosChecked = 0;
+
+  if (!fs.existsSync(resolvedDir)) {
+    return {
+      ok: false,
+      errors: [`Scenarios directory not found: ${resolvedDir}`],
+      warnings,
+      scenariosChecked,
+    };
+  }
+
+  const indexPath = path.join(resolvedDir, 'index.json');
+  if (!fs.existsSync(indexPath)) {
+    return {
+      ok: false,
+      errors: [`Missing scenario registry: ${indexPath}`],
+      warnings,
+      scenariosChecked,
+    };
+  }
+
+  let indexEntries;
+  try {
+    indexEntries = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+  } catch (err) {
+    return {
+      ok: false,
+      errors: [
+        `Invalid JSON in ${indexPath}: ${err instanceof Error ? err.message : String(err)}`,
+      ],
+      warnings,
+      scenariosChecked,
+    };
+  }
+
+  if (!Array.isArray(indexEntries) || indexEntries.length === 0) {
+    return {
+      ok: false,
+      errors: [`${indexPath} must be a non-empty JSON array of scenario entries.`],
+      warnings,
+      scenariosChecked,
+    };
+  }
+
+  const seenIds = new Set();
+
+  for (const entry of indexEntries) {
+    const scenarioId = typeof entry?.id === 'string' ? entry.id.trim() : '';
+    if (!scenarioId) {
+      errors.push('Scenario entry in index.json is missing a non-empty string "id".');
+      continue;
+    }
+
+    if (seenIds.has(scenarioId)) {
+      errors.push(`Duplicate scenario id "${scenarioId}" in index.json.`);
+      continue;
+    }
+    seenIds.add(scenarioId);
+
+    const scenarioDir = path.join(resolvedDir, scenarioId);
+    if (!isInsideDir(scenarioDir, resolvedDir) || !fs.existsSync(scenarioDir)) {
+      errors.push(`[${scenarioId}] Scenario directory not found: ${scenarioDir}`);
+      continue;
+    }
+
+    scenariosChecked += 1;
+
+    const manifestPath = path.join(scenarioDir, 'scenario.json');
+    if (!fs.existsSync(manifestPath)) {
+      errors.push(`[${scenarioId}] Missing manifest: ${manifestPath}`);
+      continue;
+    }
+
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    } catch (err) {
+      errors.push(
+        `[${scenarioId}] Invalid JSON in scenario.json: ${err instanceof Error ? err.message : String(err)}`
+      );
+      continue;
+    }
+
+    if (typeof manifest.id !== 'string' || !manifest.id.trim()) {
+      errors.push(`[${scenarioId}] scenario.json is missing required string "id".`);
+    } else if (manifest.id !== scenarioId) {
+      warnings.push(
+        `[${scenarioId}] scenario.json "id" ("${manifest.id}") differs from folder/index id ("${scenarioId}").`
+      );
+    }
+
+    if (typeof manifest.title !== 'string' || !manifest.title.trim()) {
+      errors.push(`[${scenarioId}] scenario.json is missing required string "title".`);
+    }
+
+    if (typeof manifest.startTime !== 'string' || !/^\d{1,2}:\d{2}$/.test(manifest.startTime)) {
+      errors.push(
+        `[${scenarioId}] scenario.json "startTime" must be a 24-hour "HH:MM" string (got ${JSON.stringify(manifest.startTime)}).`
+      );
+    }
+
+    const contactIds = new Set();
+    if (!Array.isArray(manifest.contacts)) {
+      errors.push(`[${scenarioId}] scenario.json "contacts" must be an array.`);
+    } else {
+      for (const contact of manifest.contacts) {
+        if (!contact || typeof contact.id !== 'string' || !contact.id.trim()) {
+          errors.push(`[${scenarioId}] Contact entry is missing a valid "id".`);
+          continue;
+        }
+        if (typeof contact.name !== 'string' || !contact.name.trim()) {
+          errors.push(`[${scenarioId}] Contact "${contact.id}" is missing a "name".`);
+        }
+        contactIds.add(contact.id);
+      }
+    }
+
+    if (!Array.isArray(manifest.files)) {
+      errors.push(`[${scenarioId}] scenario.json "files" must be an array.`);
+    } else {
+      for (const fileEntry of manifest.files) {
+        if (!fileEntry || typeof fileEntry.path !== 'string' || !fileEntry.path.trim()) {
+          errors.push(`[${scenarioId}] File catalog entry is missing a valid "path".`);
+          continue;
+        }
+        if (typeof fileEntry.name !== 'string' || !fileEntry.name.trim()) {
+          errors.push(`[${scenarioId}] File entry "${fileEntry.path}" is missing "name".`);
+        }
+        if (typeof fileEntry.folder !== 'string' || !fileEntry.folder.trim()) {
+          errors.push(`[${scenarioId}] File entry "${fileEntry.path}" is missing "folder".`);
+        }
+        if (typeof fileEntry.kind !== 'string' || !fileEntry.kind.trim()) {
+          errors.push(`[${scenarioId}] File entry "${fileEntry.path}" is missing "kind".`);
+        }
+
+        checkAssetPath({
+          scenarioId,
+          scenarioDir,
+          relPath: fileEntry.path,
+          sourceLabel: 'scenario.json files[]',
+          treatMissingAsWarning: fileEntry.kind === 'audio',
+          errors,
+          warnings,
+        });
+      }
+    }
+
+    if (manifest.theme !== undefined) {
+      if (typeof manifest.theme !== 'object' || manifest.theme === null || Array.isArray(manifest.theme)) {
+        errors.push(`[${scenarioId}] scenario.json "theme" must be an object when provided.`);
+      } else if (typeof manifest.theme.wallpaperImage === 'string' && manifest.theme.wallpaperImage.trim()) {
+        checkAssetPath({
+          scenarioId,
+          scenarioDir,
+          relPath: manifest.theme.wallpaperImage,
+          sourceLabel: 'scenario.json theme.wallpaperImage',
+          treatMissingAsWarning: false,
+          errors,
+          warnings,
+        });
+      }
+    }
+
+    const entrypoints = resolveScenarioEntrypoints(scenarioDir);
+    const storyFileRef = typeof manifest.storyFile === 'string' ? manifest.storyFile : 'story.ink';
+    if (entrypoints.length === 0) {
+      const jsonFallback = path.resolve(scenarioDir, storyFileRef.replace(/\.ink$/i, '.json'));
+      if (!fs.existsSync(jsonFallback)) {
+        errors.push(`[${scenarioId}] No .ink entrypoint or precompiled .json story found.`);
+      }
+    } else {
+      for (const inkPath of entrypoints) {
+        try {
+          const result = compileInkFile(inkPath, scenarioDir);
+          for (const warn of result.warnings) {
+            warnings.push(`[${scenarioId}] Ink warning (${path.basename(inkPath)}): ${warn}`);
+          }
+        } catch (err) {
+          errors.push(
+            `[${scenarioId}] Ink compile error: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    }
+
+    const inkFiles = collectInkFiles(scenarioDir);
+    for (const [relInkPath, inkSource] of Object.entries(inkFiles)) {
+      const { senders, assets } = scanInkTags(inkSource);
+      for (const senderId of senders) {
+        if (!contactIds.has(senderId)) {
+          warnings.push(
+            `[${scenarioId}] ${relInkPath} references # SENDER: "${senderId}" which is not in scenario.json contacts[].`
+          );
+        }
+      }
+      for (const asset of assets) {
+        checkAssetPath({
+          scenarioId,
+          scenarioDir,
+          relPath: asset.path,
+          sourceLabel: `${relInkPath}:${asset.lineNum} (# ${asset.kind})`,
+          treatMissingAsWarning: Boolean(asset.isAudio),
+          errors,
+          warnings,
+        });
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    scenariosChecked,
+  };
+}
+
+function parseScenariosArg(argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--scenarios' && argv[i + 1]) {
+      return argv[i + 1];
+    }
+    if (arg.startsWith('--scenarios=')) {
+      return arg.slice('--scenarios='.length);
+    }
+  }
+  return undefined;
+}
+
+const isDirectRun =
+  process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (isDirectRun) {
+  const scenariosDir = resolveScenariosDir(parseScenariosArg(process.argv.slice(2)));
+  const result = validateScenarios(scenariosDir);
+
+  for (const warn of result.warnings) {
+    console.warn(`[validate] warning: ${warn}`);
+  }
+  for (const err of result.errors) {
+    console.error(`[validate] error: ${err}`);
+  }
+
+  console.log(
+    `[validate] Checked ${result.scenariosChecked} scenario(s) in ${scenariosDir} — ${result.errors.length} error(s), ${result.warnings.length} warning(s).`
+  );
+
+  if (!result.ok) {
+    process.exit(1);
+  }
+}

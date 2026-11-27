@@ -37,13 +37,15 @@ export function StartMenu() {
       <div className="border-b border-[#2c313b] bg-[#14171c] px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-white">Curu-OS</div>
+            <div className="text-sm font-semibold text-white">
+              {manifest?.theme?.osName || 'Curu-OS'}
+            </div>
             <div className="text-[11px] text-slate-400">
               {manifest?.subtitle || 'Workplace Terminal'}
             </div>
           </div>
           <span className="rounded-[2px] bg-[#262b35] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-            v0.1
+            {manifest?.theme?.osVersion || 'v0.1'}
           </span>
         </div>
       </div>

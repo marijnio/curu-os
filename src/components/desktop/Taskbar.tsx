@@ -13,12 +13,15 @@ const TASKBAR_APPS: Array<{
 ];
 
 export function Taskbar() {
+  const manifest = useOsStore((s) => s.manifest);
   const windows = useOsStore((s) => s.windows);
   const focusedApp = useOsStore((s) => s.focusedApp);
   const startMenuOpen = useOsStore((s) => s.startMenuOpen);
   const toggleStartMenu = useOsStore((s) => s.toggleStartMenu);
   const openApp = useOsStore((s) => s.openApp);
   const minimizeApp = useOsStore((s) => s.minimizeApp);
+
+  const osName = manifest?.theme?.osName || 'Curu-OS';
 
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
   const emails = useOsStore((s) => s.emails);
@@ -69,8 +72,8 @@ export function Taskbar() {
             e.stopPropagation();
             toggleStartMenu();
           }}
-          title="Curu-OS Menu"
-          aria-label="Curu-OS Start Menu"
+          title={`${osName} Menu`}
+          aria-label={`${osName} Start Menu`}
           className={`flex h-10 w-12 items-center justify-center transition-colors ${
             startMenuOpen
               ? 'bg-[#272b34] text-[#4ca3dd]'

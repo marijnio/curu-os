@@ -28,6 +28,14 @@ export interface FileCatalogEntry {
   unlockedByDefault?: boolean;
 }
 
+export interface ScenarioTheme {
+  osName?: string;
+  osVersion?: string;
+  windowTitle?: string;
+  wallpaperColor?: string;
+  wallpaperImage?: string;
+}
+
 export interface ScenarioManifest {
   id: string;
   title: string;
@@ -36,6 +44,7 @@ export interface ScenarioManifest {
   startTime: string;
   dayLabel: string;
   storyFile: string;
+  theme?: ScenarioTheme;
   contacts: Contact[];
   files: FileCatalogEntry[];
 }
