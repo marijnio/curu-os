@@ -11,6 +11,7 @@ import {
   StickyNote,
   User,
 } from 'lucide-react';
+import { selectTranslations } from '../../engine/i18n';
 import { normalizePlayerPrompt } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -26,6 +27,7 @@ export function StartMenu() {
   const logout = useOsStore((s) => s.logout);
   const resetProgress = useOsStore((s) => s.resetProgress);
   const toggleStartMenu = useOsStore((s) => s.toggleStartMenu);
+  const t = useOsStore(selectTranslations);
 
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -49,12 +51,12 @@ export function StartMenu() {
               {manifest?.theme?.osName || 'Curu-OS'}
             </div>
             <div className="truncate text-[11px] text-slate-400">
-              {manifest?.subtitle || 'Workplace Terminal'}
+              {manifest?.subtitle || t.startMenu.defaultSubtitle}
             </div>
             {playerName && (
               <div className="mt-1 flex items-center gap-1 truncate text-[10px] text-[#7cc4f5]">
                 <User className="h-2.5 w-2.5 shrink-0" />
-                <span className="truncate">Signed in as {playerName}</span>
+                <span className="truncate">{t.startMenu.signedInAs(playerName)}</span>
               </div>
             )}
           </div>
@@ -67,7 +69,7 @@ export function StartMenu() {
       {/* Applications */}
       <div className="border-b border-[#2c313b] py-1.5">
         <div className="px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Applications
+          {t.startMenu.applications}
         </div>
         <button
           type="button"
@@ -75,7 +77,7 @@ export function StartMenu() {
           className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
         >
           <MessageSquare className="h-4 w-4 text-[#25b864]" />
-          <span>Messages</span>
+          <span>{t.apps.messages}</span>
         </button>
         <button
           type="button"
@@ -83,7 +85,7 @@ export function StartMenu() {
           className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
         >
           <Mail className="h-4 w-4 text-[#4ca3dd]" />
-          <span>Mail</span>
+          <span>{t.apps.mail}</span>
         </button>
         <button
           type="button"
@@ -91,7 +93,7 @@ export function StartMenu() {
           className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
         >
           <Folder className="h-4 w-4 fill-[#eab308] text-[#ca8a04]" />
-          <span>File Explorer</span>
+          <span>{t.apps.explorer}</span>
         </button>
         <button
           type="button"
@@ -99,7 +101,7 @@ export function StartMenu() {
           className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
         >
           <StickyNote className="h-4 w-4 text-[#f59e0b]" />
-          <span>Notes</span>
+          <span>{t.apps.notes}</span>
         </button>
       </div>
 
@@ -107,7 +109,7 @@ export function StartMenu() {
       <div className="border-b border-[#2c313b] py-1.5">
         <div className="flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           <Layers className="h-3 w-3" />
-          Scenario
+          {t.startMenu.scenario}
         </div>
         {manifest?.title && (
           <div className="truncate px-3.5 py-1 text-[11px] font-medium text-slate-300">
@@ -119,7 +121,7 @@ export function StartMenu() {
           onClick={() => openScenarioSelector()}
           className="flex w-full items-center justify-between px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
         >
-          <span>Switch Scenario...</span>
+          <span>{t.startMenu.switchScenario}</span>
           <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
         </button>
       </div>
@@ -140,7 +142,7 @@ export function StartMenu() {
         >
           <span className="flex items-center gap-2.5">
             <Bug className="h-4 w-4 text-slate-400" />
-            Director / Debug Inspector
+            {t.startMenu.directorInspector}
           </span>
           <span
             className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium ${
@@ -149,7 +151,7 @@ export function StartMenu() {
                 : 'bg-[#262b35] text-slate-400'
             }`}
           >
-            {directorOpen ? 'ON' : 'OFF'}
+            {directorOpen ? t.startMenu.on : t.startMenu.off}
           </span>
         </button>
 
@@ -160,18 +162,20 @@ export function StartMenu() {
             className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-rose-300 hover:bg-[#332227] cursor-pointer"
           >
             <RotateCcw className="h-4 w-4" />
-            Reset Progress
+            {t.startMenu.resetProgress}
           </button>
         ) : (
           <div className="mx-2 my-1 flex items-center justify-between gap-2 border border-rose-500/40 bg-[#2d1c21] px-2.5 py-1.5">
-            <span className="text-[11px] text-rose-200">Restart scenario?</span>
+            <span className="text-[11px] text-rose-200">
+              {t.startMenu.restartPrompt}
+            </span>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
                 className="rounded-[2px] px-2 py-0.5 text-[11px] text-slate-300 hover:bg-[#3a3f4b] cursor-pointer"
               >
-                Cancel
+                {t.startMenu.cancel}
               </button>
               <button
                 type="button"
@@ -181,7 +185,7 @@ export function StartMenu() {
                 }}
                 className="rounded-[2px] bg-[#d93025] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[#e53935] cursor-pointer"
               >
-                Reset
+                {t.startMenu.reset}
               </button>
             </div>
           </div>
@@ -194,7 +198,7 @@ export function StartMenu() {
             className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-slate-300 hover:bg-[#2a2f3a] cursor-pointer"
           >
             <LogOut className="h-4 w-4 text-slate-400" />
-            Sign Out
+            {t.startMenu.signOut}
           </button>
         )}
       </div>

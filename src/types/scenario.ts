@@ -1,3 +1,5 @@
+export type ScenarioLocale = 'en' | 'nl';
+
 export interface ScenarioIndexEntry {
   id: string;
   title?: string;
@@ -47,11 +49,19 @@ export interface PlayerPromptConfig {
   required?: boolean;
 }
 
+export interface InitialNoteEntry {
+  id?: string;
+  title: string;
+  content: string;
+  updatedAt?: string;
+}
+
 export interface ScenarioManifest {
   id: string;
   title: string;
   subtitle: string;
   description: string;
+  locale?: ScenarioLocale;
   startTime: string;
   dayLabel: string;
   storyFile: string;
@@ -59,4 +69,5 @@ export interface ScenarioManifest {
   playerPrompt?: PlayerPromptConfig;
   contacts: Contact[];
   files: FileCatalogEntry[];
+  initialNotes?: InitialNoteEntry[];
 }

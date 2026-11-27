@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
+import { selectTranslations } from '../../engine/i18n';
 import { interpolateTemplate } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -23,6 +24,7 @@ interface MarkdownViewerProps {
 export function MarkdownViewer({ path }: MarkdownViewerProps) {
   const scenarioId = useOsStore((s) => s.scenarioId);
   const templateVars = useOsStore((s) => s.templateVars);
+  const t = useOsStore(selectTranslations);
   const url = resolveScenarioAssetUrl(scenarioId, path);
 
   const [content, setContent] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function MarkdownViewer({ path }: MarkdownViewerProps) {
     return (
       <div className="flex h-40 items-center justify-center gap-2 text-xs text-slate-500">
         <Loader2 className="h-4 w-4 animate-spin text-[#0067c0]" />
-        Loading document...
+        {t.shared.loadingDocument}
       </div>
     );
   }

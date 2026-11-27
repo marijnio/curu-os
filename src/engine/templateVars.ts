@@ -1,4 +1,4 @@
-import type { PlayerPromptConfig } from '../types/scenario';
+import type { PlayerPromptConfig, ScenarioLocale } from '../types/scenario';
 
 export interface ResolvedPlayerPrompt {
   variableName: string;
@@ -13,7 +13,8 @@ const VALID_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TEMPLATE_TOKEN_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
 
 export function normalizePlayerPrompt(
-  raw?: PlayerPromptConfig | null
+  raw?: PlayerPromptConfig | null,
+  locale?: ScenarioLocale
 ): ResolvedPlayerPrompt | null {
   if (!raw || raw.enabled === false) {
     return null;
@@ -21,13 +22,16 @@ export function normalizePlayerPrompt(
 
   const trimmedVar = typeof raw.variableName === 'string' ? raw.variableName.trim() : '';
   const variableName = VALID_IDENTIFIER_RE.test(trimmedVar) ? trimmedVar : 'player_name';
+  const defaultLabel = locale === 'nl' ? 'Jouw naam' : 'Your Name';
+  const defaultPlaceholder =
+    locale === 'nl' ? 'Vul je naam in...' : 'Enter your name...';
 
   return {
     variableName,
-    label: (typeof raw.label === 'string' && raw.label.trim()) || 'Your Name',
+    label: (typeof raw.label === 'string' && raw.label.trim()) || defaultLabel,
     placeholder:
       (typeof raw.placeholder === 'string' && raw.placeholder.trim()) ||
-      'Enter your name...',
+      defaultPlaceholder,
     helperText:
       typeof raw.helperText === 'string' && raw.helperText.trim()
         ? raw.helperText.trim()

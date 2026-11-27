@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { AppId } from '../../types/os';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
+import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 import { DesktopIcon } from './DesktopIcon';
 import { Window } from './Window';
@@ -33,6 +34,8 @@ export function Desktop() {
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
   const emails = useOsStore((s) => s.emails);
   const files = useOsStore((s) => s.files);
+  const unreadNotesCount = useOsStore((s) => s.unreadNotesCount);
+  const t = useOsStore(selectTranslations);
 
   const openApp = useOsStore((s) => s.openApp);
   const closeApp = useOsStore((s) => s.closeApp);
@@ -96,7 +99,7 @@ export function Desktop() {
       {/* Desktop Shortcuts */}
       <div className="relative z-10 flex flex-col items-start gap-2 p-3">
         <DesktopIcon
-          label="Messages"
+          label={t.apps.messages}
           icon={
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#25b864] shadow-sm">
               <MessageSquare className="h-5 w-5 fill-white text-white" />
@@ -108,7 +111,7 @@ export function Desktop() {
           onOpen={() => openApp('messages')}
         />
         <DesktopIcon
-          label="Mail"
+          label={t.apps.mail}
           icon={
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0078d4] shadow-sm">
               <Mail className="h-5 w-5 text-white" />
@@ -120,7 +123,7 @@ export function Desktop() {
           onOpen={() => openApp('mail')}
         />
         <DesktopIcon
-          label="File Explorer"
+          label={t.apps.explorer}
           icon={
             <Folder className="h-10 w-10 fill-[#f3c13a] text-[#c79514] drop-shadow-sm" />
           }
@@ -130,12 +133,13 @@ export function Desktop() {
           onOpen={() => openApp('explorer')}
         />
         <DesktopIcon
-          label="Notes"
+          label={t.apps.notes}
           icon={
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#d97706] shadow-sm">
               <StickyNote className="h-5 w-5 text-white" />
             </div>
           }
+          badgeCount={unreadNotesCount}
           selected={selectedIcon === 'notes'}
           onSelect={() => setSelectedIcon('notes')}
           onOpen={() => openApp('notes')}
@@ -147,7 +151,7 @@ export function Desktop() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45">
           <div className="flex items-center gap-3 rounded-[2px] border border-slate-300 bg-white px-5 py-3.5 text-sm text-slate-800 shadow-xl">
             <Loader2 className="h-4 w-4 animate-spin text-[#0067c0]" />
-            Loading workspace...
+            {t.desktop.loadingWorkspace}
           </div>
         </div>
       )}
@@ -157,7 +161,7 @@ export function Desktop() {
           <div className="max-w-md rounded-[3px] border border-slate-300 bg-white p-5 shadow-2xl">
             <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
               <AlertTriangle className="h-5 w-5 text-rose-600" />
-              Scenario Load Error
+              {t.desktop.scenarioLoadError}
             </div>
             <pre className="mt-3 max-h-48 overflow-auto rounded-[2px] border border-slate-200 bg-slate-50 p-3 text-xs text-rose-700 whitespace-pre-wrap">
               {loadError}
@@ -168,7 +172,7 @@ export function Desktop() {
               className="mt-4 inline-flex items-center gap-1.5 rounded-[2px] bg-[#0067c0] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#005aa8]"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Retry Scenario
+              {t.desktop.retryScenario}
             </button>
           </div>
         </div>
@@ -239,7 +243,7 @@ export function Desktop() {
                   e.stopPropagation();
                   dismissToast(toast.id);
                 }}
-                aria-label="Dismiss notification"
+                aria-label={t.desktop.dismissNotification}
                 className="p-0.5 text-slate-400 hover:text-white"
               >
                 <X className="h-3.5 w-3.5" />

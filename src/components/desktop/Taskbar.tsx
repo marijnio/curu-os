@@ -1,17 +1,10 @@
 import { Bug, Folder, Mail, MessageSquare, StickyNote } from 'lucide-react';
 import type { AppId } from '../../types/os';
+import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 import { SystemTray } from './SystemTray';
 
-const TASKBAR_APPS: Array<{
-  id: AppId;
-  label: string;
-}> = [
-  { id: 'messages', label: 'Messages' },
-  { id: 'mail', label: 'Mail' },
-  { id: 'explorer', label: 'File Explorer' },
-  { id: 'notes', label: 'Notes' },
-];
+const TASKBAR_APP_IDS: AppId[] = ['messages', 'mail', 'explorer', 'notes'];
 
 export function Taskbar() {
   const manifest = useOsStore((s) => s.manifest);
@@ -23,10 +16,12 @@ export function Taskbar() {
   const minimizeApp = useOsStore((s) => s.minimizeApp);
 
   const osName = manifest?.theme?.osName || 'Curu-OS';
+  const t = useOsStore(selectTranslations);
 
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
   const emails = useOsStore((s) => s.emails);
   const files = useOsStore((s) => s.files);
+  const unreadNotesCount = useOsStore((s) => s.unreadNotesCount);
 
   const totalChatUnread = Object.values(unreadChatCounts).reduce((a, b) => a + b, 0);
   const totalMailUnread = emails.filter((e) => !e.read).length;
@@ -36,7 +31,7 @@ export function Taskbar() {
     messages: totalChatUnread,
     mail: totalMailUnread,
     explorer: totalFilesUnread,
-    notes: 0,
+    notes: unreadNotesCount,
     director: 0,
   };
 
@@ -76,8 +71,8 @@ export function Taskbar() {
             e.stopPropagation();
             toggleStartMenu();
           }}
-          title={`${osName} Menu`}
-          aria-label={`${osName} Start Menu`}
+          title={t.taskbar.startMenuTooltip(osName)}
+          aria-label={t.taskbar.startMenuAria(osName)}
           className={`flex h-10 w-12 items-center justify-center transition-colors ${
             startMenuOpen
               ? 'bg-[#272b34] text-[#4ca3dd]'
@@ -99,17 +94,18 @@ export function Taskbar() {
 
         {/* Pinned & Open App Tabs */}
         <div className="flex h-full items-center">
-          {TASKBAR_APPS.map((app) => {
-            const win = windows[app.id];
-            const isActive = win.isOpen && !win.isMinimized && focusedApp === app.id;
-            const badge = badgeByApp[app.id];
+          {TASKBAR_APP_IDS.map((appId) => {
+            const win = windows[appId];
+            const isActive = win.isOpen && !win.isMinimized && focusedApp === appId;
+            const badge = badgeByApp[appId];
+            const label = t.apps[appId];
 
             return (
               <button
-                key={app.id}
+                key={appId}
                 type="button"
-                onClick={() => handleTaskButton(app.id)}
-                title={app.label}
+                onClick={() => handleTaskButton(appId)}
+                title={label}
                 className={`relative flex h-10 items-center gap-2 px-3.5 text-xs transition-colors ${
                   isActive
                     ? 'bg-[#272b34] text-white'
@@ -118,8 +114,8 @@ export function Taskbar() {
                       : 'text-slate-300 hover:bg-[#1d2028]'
                 }`}
               >
-                {renderTaskIcon(app.id)}
-                <span className="hidden md:inline font-normal">{app.label}</span>
+                {renderTaskIcon(appId)}
+                <span className="hidden md:inline font-normal">{label}</span>
                 {badge > 0 && (
                   <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d93025] px-1 text-[10px] font-bold text-white">
                     {badge > 9 ? '9+' : badge}
@@ -140,7 +136,7 @@ export function Taskbar() {
             <button
               type="button"
               onClick={() => handleTaskButton('director')}
-              title="Director Inspector"
+              title={t.apps.director}
               className={`relative flex h-10 items-center gap-2 px-3.5 text-xs transition-colors ${
                 !windows.director.isMinimized && focusedApp === 'director'
                   ? 'bg-[#272b34] text-white'
@@ -148,7 +144,9 @@ export function Taskbar() {
               }`}
             >
               {renderTaskIcon('director')}
-              <span className="hidden md:inline font-normal">Director</span>
+              <span className="hidden md:inline font-normal">
+                {t.taskbar.directorShort}
+              </span>
               <span
                 className={`absolute bottom-0 left-1/2 h-[2px] -translate-x-1/2 ${
                   !windows.director.isMinimized && focusedApp === 'director'

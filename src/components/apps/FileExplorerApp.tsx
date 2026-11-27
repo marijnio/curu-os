@@ -15,16 +15,17 @@ import {
 } from 'lucide-react';
 import type { FolderName } from '../../types/scenario';
 import type { VirtualFile } from '../../types/os';
+import { selectTranslations } from '../../engine/i18n';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
 import { useOsStore } from '../../store/useOsStore';
 import { MarkdownViewer } from '../shared/MarkdownViewer';
 import { AudioPlayer } from '../shared/AudioPlayer';
 
-const FOLDERS: Array<{ name: FolderName; label: string }> = [
-  { name: 'Documents', label: 'Documents' },
-  { name: 'Images', label: 'Images' },
-  { name: 'Voice Notes', label: 'Voice Notes' },
-  { name: 'Downloads', label: 'Downloads' },
+const FOLDERS: FolderName[] = [
+  'Documents',
+  'Images',
+  'Voice Notes',
+  'Downloads',
 ];
 
 export function FileExplorerApp() {
@@ -36,6 +37,7 @@ export function FileExplorerApp() {
 
   const selectFolder = useOsStore((s) => s.selectFolder);
   const selectFile = useOsStore((s) => s.selectFile);
+  const t = useOsStore(selectTranslations);
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,6 +58,7 @@ export function FileExplorerApp() {
           f.name,
           f.path,
           f.folder,
+          t.folders[f.folder],
           f.transcript ?? '',
         ]
           .join(' ')
@@ -93,9 +96,10 @@ export function FileExplorerApp() {
   };
 
   const formatSource = (file: VirtualFile) => {
-    if (!file.receivedVia) return 'Workspace';
+    if (!file.receivedVia) return t.explorer.workspace;
     const sender = contacts.find((c) => c.id === file.receivedVia?.senderId);
-    const channelLabel = file.receivedVia.channel === 'chat' ? 'Messages' : 'Mail';
+    const channelLabel =
+      file.receivedVia.channel === 'chat' ? t.apps.messages : t.apps.mail;
     return `${channelLabel} · ${sender?.name ?? file.receivedVia.senderId}`;
   };
 
@@ -140,9 +144,11 @@ export function FileExplorerApp() {
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-slate-200 bg-[#f8f9fa] px-3">
         <div className="flex items-center gap-1.5 text-xs text-slate-700">
           <Folder className="h-3.5 w-3.5 fill-[#f3c13a] text-[#c79514]" />
-          <span className="text-slate-500">This Desk</span>
+          <span className="text-slate-500">{t.explorer.thisDesk}</span>
           <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-          <span className="font-medium text-slate-900">{selectedFolder}</span>
+          <span className="font-medium text-slate-900">
+            {t.folders[selectedFolder]}
+          </span>
           {selectedFile && (
             <>
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
@@ -160,14 +166,14 @@ export function FileExplorerApp() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search all files..."
+              placeholder={t.explorer.searchPlaceholder}
               className="w-44 rounded border border-slate-200 bg-white py-0.5 pr-6 pl-6 text-[11px] text-slate-800 outline-none focus:border-[#0067c0]"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                aria-label="Clear file search"
+                aria-label={t.explorer.clearSearch}
                 className="absolute right-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -179,7 +185,7 @@ export function FileExplorerApp() {
           <button
             type="button"
             onClick={() => setViewMode('list')}
-            aria-label="List view"
+            aria-label={t.explorer.listView}
             className={`rounded p-1 cursor-pointer ${
               viewMode === 'list'
                 ? 'bg-slate-200 text-slate-900'
@@ -191,7 +197,7 @@ export function FileExplorerApp() {
           <button
             type="button"
             onClick={() => setViewMode('grid')}
-            aria-label="Grid view"
+            aria-label={t.explorer.gridView}
             className={`rounded p-1 cursor-pointer ${
               viewMode === 'grid'
                 ? 'bg-slate-200 text-slate-900'
@@ -209,16 +215,16 @@ export function FileExplorerApp() {
         {/* Left Sidebar: Folder Tree */}
         <aside className="flex w-44 shrink-0 flex-col border-r border-slate-200 bg-[#f3f4f6]">
           <nav className="flex-1 space-y-0.5 p-2">
-            {FOLDERS.map((folder) => {
-              const list = filesInFolder(folder.name);
+            {FOLDERS.map((folderName) => {
+              const list = filesInFolder(folderName);
               const unread = list.filter((f) => !f.opened).length;
-              const active = selectedFolder === folder.name;
+              const active = selectedFolder === folderName;
 
               return (
                 <button
-                  key={folder.name}
+                  key={folderName}
                   type="button"
-                  onClick={() => selectFolder(folder.name)}
+                  onClick={() => selectFolder(folderName)}
                   className={`flex w-full items-center justify-between rounded-[3px] px-2.5 py-1.5 text-xs transition-colors cursor-pointer ${
                     active
                       ? 'bg-[#dcebfb] text-slate-950 font-semibold'
@@ -226,8 +232,8 @@ export function FileExplorerApp() {
                   }`}
                 >
                   <span className="flex items-center gap-2 truncate">
-                    {getFolderIcon(folder.name)}
-                    <span className="truncate">{folder.label}</span>
+                    {getFolderIcon(folderName)}
+                    <span className="truncate">{t.folders[folderName]}</span>
                   </span>
                   <span className="flex items-center gap-1.5 shrink-0">
                     {unread > 0 && (
@@ -247,13 +253,13 @@ export function FileExplorerApp() {
         <section className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
           {isSearching && (
             <div className="border-b border-slate-200 bg-[#f4f8fd] px-3 py-1.5 text-[10px] font-medium text-[#005aa8]">
-              Searching all folders ({visibleFiles.length})
+              {t.explorer.searchingAllFolders(visibleFiles.length)}
             </div>
           )}
           <div className="flex-1 overflow-y-auto p-2">
             {visibleFiles.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-400">
-                {isSearching ? 'No matching files found.' : 'This folder is empty.'}
+                {isSearching ? t.explorer.noMatchingFiles : t.explorer.emptyFolder}
               </div>
             ) : viewMode === 'list' ? (
               <div className="space-y-0.5">
@@ -341,11 +347,11 @@ export function FileExplorerApp() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(true)}
-                  title="Expand preview"
+                  title={t.explorer.expandPreview}
                   className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] text-slate-700 transition hover:bg-slate-100 cursor-pointer"
                 >
                   <Maximize2 className="h-3 w-3" />
-                  Expand
+                  {t.explorer.expand}
                 </button>
               </header>
 
@@ -355,7 +361,7 @@ export function FileExplorerApp() {
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center text-xs text-slate-400">
-              Select a file to inspect its contents.
+              {t.explorer.selectFile}
             </div>
           )}
         </section>

@@ -42,5 +42,6 @@ export interface ToastNotification {
     contactId?: string;
     emailId?: string;
     filePath?: string;
+    noteId?: string;
   };
 }

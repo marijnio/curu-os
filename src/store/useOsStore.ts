@@ -16,7 +16,13 @@ import type {
   VirtualFile,
   WindowState,
 } from '../types/os';
-import type { Contact, FolderName, ScenarioManifest } from '../types/scenario';
+import type {
+  Contact,
+  FolderName,
+  ScenarioLocale,
+  ScenarioManifest,
+} from '../types/scenario';
+import { getTranslations } from '../engine/i18n';
 import {
   fetchAuthStatus,
   submitLogin,
@@ -68,22 +74,23 @@ type DispatchBeat =
   | { kind: 'contact_unlock'; contactId: string }
   | { kind: 'contact_status'; contactId: string; status: 'online' | 'away' | 'offline' }
   | {
-      kind: 'unlock_file';
-      path: string;
-      folder?: FolderName;
-      name?: string;
-      receivedVia?: { channel: Channel; senderId: string };
-      notify?: boolean;
-    }
+    kind: 'unlock_file';
+    path: string;
+    folder?: FolderName;
+    name?: string;
+    receivedVia?: { channel: Channel; senderId: string };
+    notify?: boolean;
+  }
+  | { kind: 'add_note'; id?: string; title: string; content: string }
   | { kind: 'chat'; message: ChatMessage; typingDelayMs: number }
   | {
-      kind: 'email_line';
-      senderId: string;
-      subject?: string;
-      line: string;
-      attachments: string[];
-      flagEmail: boolean;
-    }
+    kind: 'email_line';
+    senderId: string;
+    subject?: string;
+    line: string;
+    attachments: string[];
+    flagEmail: boolean;
+  }
   | { kind: 'register_hook'; hook: EventHook }
   | { kind: 'set_choices'; choices: ActiveChoice[] };
 
@@ -103,6 +110,7 @@ export interface PersistedSnapshot {
   emails: EmailMessage[];
   files: VirtualFile[];
   notes: NoteItem[];
+  unreadNotesCount?: number;
   activeChoices: ActiveChoice[];
   pendingHooks: EventHook[];
   pausedByContinueHook: boolean;
@@ -153,11 +161,14 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function createDefaultWindows(): Record<AppId, WindowState> {
+function createDefaultWindows(
+  locale?: ScenarioLocale
+): Record<AppId, WindowState> {
+  const apps = getTranslations(locale).apps;
   return {
     messages: {
       id: 'messages',
-      title: 'Messages',
+      title: apps.messages,
       isOpen: true,
       isMinimized: false,
       isMaximized: false,
@@ -167,7 +178,7 @@ function createDefaultWindows(): Record<AppId, WindowState> {
     },
     mail: {
       id: 'mail',
-      title: 'Mail',
+      title: apps.mail,
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
@@ -177,7 +188,7 @@ function createDefaultWindows(): Record<AppId, WindowState> {
     },
     explorer: {
       id: 'explorer',
-      title: 'File Explorer',
+      title: apps.explorer,
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
@@ -187,7 +198,7 @@ function createDefaultWindows(): Record<AppId, WindowState> {
     },
     notes: {
       id: 'notes',
-      title: 'Notes',
+      title: apps.notes,
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
@@ -197,7 +208,7 @@ function createDefaultWindows(): Record<AppId, WindowState> {
     },
     director: {
       id: 'director',
-      title: 'Director Inspector',
+      title: apps.director,
       isOpen: false,
       isMinimized: false,
       isMaximized: false,
@@ -246,6 +257,47 @@ function buildInitialFiles(manifest: ScenarioManifest, startTime: string): Virtu
         opened: false,
       };
     });
+}
+
+function buildInitialNotes(
+  manifest: ScenarioManifest,
+  startTimeStr: string,
+  templateVars: Record<string, string>
+): NoteItem[] {
+  if (Array.isArray(manifest.initialNotes) && manifest.initialNotes.length > 0) {
+    return manifest.initialNotes.map((entry, idx) => ({
+      id: entry.id?.trim() || `note_init_${idx + 1}`,
+      title: interpolateTemplate(entry.title, templateVars),
+      content: interpolateTemplate(entry.content, templateVars),
+      updatedAt: entry.updatedAt?.trim() || startTimeStr,
+    }));
+  }
+  return [
+    {
+      id: 'note_default',
+      title: getTranslations(manifest.locale).notes.defaultNoteTitle,
+      content: '',
+      updatedAt: startTimeStr,
+    },
+  ];
+}
+
+function matchesNoteHookTarget(note: NoteItem, target: string): boolean {
+  const trimmed = target.trim();
+  const lower = trimmed.toLowerCase();
+  if (!lower) return false;
+  if (lower.startsWith('id:')) {
+    const expectedId = lower.slice('id:'.length).trim();
+    return note.id.toLowerCase() === expectedId;
+  }
+  if (lower.startsWith('title:')) {
+    const expectedTitle = lower.slice('title:'.length).trim();
+    return note.title.toLowerCase().includes(expectedTitle);
+  }
+  return (
+    note.id.toLowerCase() === lower ||
+    note.title.toLowerCase().includes(lower)
+  );
 }
 
 function matchesEmailHookTarget(email: EmailMessage, target: string): boolean {
@@ -317,6 +369,7 @@ export interface OsState {
   // Notes / Incident Log
   notes: NoteItem[];
   activeNoteId: string | null;
+  unreadNotesCount: number;
 
   // Narrative routing state
   activeChannel: Channel;
@@ -422,7 +475,11 @@ export const useOsStore = create<OsState>((set, get) => {
 
     if (!get().muted) {
       playNotificationChime(
-        appId === 'mail' ? 'email' : appId === 'explorer' ? 'file' : 'chat'
+        appId === 'mail'
+          ? 'email'
+          : appId === 'explorer' || appId === 'notes'
+            ? 'file'
+            : 'chat'
       );
     }
 
@@ -491,10 +548,11 @@ export const useOsStore = create<OsState>((set, get) => {
     }));
 
     if (opts?.notify) {
+      const t = getTranslations(state.manifest?.locale);
       pushNotification(
         'explorer',
-        'New File Available',
-        `${created.name} added to ${created.folder}`,
+        t.notifications.newFileTitle,
+        t.notifications.newFileBody(created.name, t.folders[created.folder]),
         { filePath: created.id }
       );
     }
@@ -545,6 +603,7 @@ export const useOsStore = create<OsState>((set, get) => {
       emails: state.emails,
       files: state.files,
       notes: state.notes,
+      unreadNotesCount: state.unreadNotesCount,
       activeChoices: state.activeChoices,
       pendingHooks: state.pendingHooks,
       pausedByContinueHook,
@@ -594,7 +653,7 @@ export const useOsStore = create<OsState>((set, get) => {
         : [
             {
               id: 'note_default',
-              title: 'Shift Notes',
+              title: getTranslations(manifest.locale).notes.defaultNoteTitle,
               content: '',
               updatedAt: formatClock24(saved.clockMinutes),
             },
@@ -609,7 +668,7 @@ export const useOsStore = create<OsState>((set, get) => {
       appPhase: 'desktop',
       pendingScenarioId: null,
       isLoading: false,
-      windows: createDefaultWindows(),
+      windows: createDefaultWindows(manifest.locale),
       focusedApp: 'messages',
       nextZIndex: 14,
       toasts: [],
@@ -623,12 +682,18 @@ export const useOsStore = create<OsState>((set, get) => {
       chatMessages: saved.chatMessages,
       unreadChatCounts: saved.unreadChatCounts ?? {},
       emails: saved.emails,
-      activeEmailId: saved.emails[saved.emails.length - 1]?.id ?? null,
+      activeEmailId: null,
       files: saved.files,
       selectedFolder: 'Documents',
       selectedFileId: saved.files[0]?.id ?? null,
       notes,
       activeNoteId: notes[0]?.id ?? null,
+      unreadNotesCount:
+        typeof saved.unreadNotesCount === 'number' &&
+          Number.isFinite(saved.unreadNotesCount) &&
+          saved.unreadNotesCount >= 0
+          ? saved.unreadNotesCount
+          : 0,
       activeChannel: saved.activeChannel,
       activeSenderId: saved.activeSenderId,
       activeEmailDraftId: saved.activeEmailDraftId,
@@ -670,10 +735,11 @@ export const useOsStore = create<OsState>((set, get) => {
       );
 
     if (shouldCreateNewEmail) {
+      const t = getTranslations(state.manifest?.locale);
       const newEmail: EmailMessage = {
         id: makeId('mail'),
         senderId: beat.senderId,
-        subject: beat.subject || '(No Subject)',
+        subject: beat.subject || t.notifications.noSubject,
         body: beat.line ? [beat.line] : [],
         timestamp,
         read: false,
@@ -685,16 +751,20 @@ export const useOsStore = create<OsState>((set, get) => {
       set((s) => ({
         emails: [...s.emails, newEmail],
         activeEmailDraftId: newEmail.id,
-        activeEmailId: s.activeEmailId ?? newEmail.id,
       }));
 
       const mailWin = state.windows.mail;
       const mailVisible =
         mailWin.isOpen && !mailWin.isMinimized && state.focusedApp === 'mail';
       if (!mailVisible) {
-        pushNotification('mail', `New Email from ${senderName}`, newEmail.subject, {
-          emailId: newEmail.id,
-        });
+        pushNotification(
+          'mail',
+          t.notifications.newEmailTitle(senderName),
+          newEmail.subject,
+          {
+            emailId: newEmail.id,
+          }
+        );
       }
     } else {
       const targetId = state.activeEmailDraftId!;
@@ -733,17 +803,18 @@ export const useOsStore = create<OsState>((set, get) => {
       unreadChatCounts: isViewingThisThread
         ? s.unreadChatCounts
         : {
-            ...s.unreadChatCounts,
-            [msg.contactId]: (s.unreadChatCounts[msg.contactId] ?? 0) + 1,
-          },
+          ...s.unreadChatCounts,
+          [msg.contactId]: (s.unreadChatCounts[msg.contactId] ?? 0) + 1,
+        },
     }));
 
     if (!isViewingThisThread && msg.sender === 'contact') {
+      const t = getTranslations(state.manifest?.locale);
       const sender = state.contacts.find((c) => c.id === msg.contactId);
       const preview =
         msg.kind === 'voice_note'
-          ? `Voice note (${msg.voiceNote?.duration ?? '0:15'})`
-          : msg.text || 'Sent an attachment';
+          ? t.notifications.voiceNotePreview(msg.voiceNote?.duration ?? '0:15')
+          : msg.text || t.notifications.sentAttachment;
       pushNotification('messages', sender?.name ?? msg.contactId, preview, {
         contactId: msg.contactId,
       });
@@ -797,6 +868,41 @@ export const useOsStore = create<OsState>((set, get) => {
             });
             break;
           }
+          case 'add_note': {
+            const state = get();
+            const updatedAt = formatClock24(state.clockMinutes);
+            const requestedId = beat.id?.trim();
+            const id =
+              requestedId && !state.notes.some((n) => n.id === requestedId)
+                ? requestedId
+                : makeId('note');
+            const newNote: NoteItem = {
+              id,
+              title: beat.title,
+              content: beat.content,
+              updatedAt,
+            };
+            const notesWin = state.windows.notes;
+            const notesVisible =
+              notesWin.isOpen &&
+              !notesWin.isMinimized &&
+              state.focusedApp === 'notes';
+
+            set((s) => ({
+              notes: [...s.notes, newNote],
+              unreadNotesCount: notesVisible
+                ? s.unreadNotesCount
+                : s.unreadNotesCount + 1,
+            }));
+
+            if (!notesVisible) {
+              const t = getTranslations(state.manifest?.locale);
+              pushNotification('notes', t.notifications.newNoteTitle, newNote.title, {
+                noteId: newNote.id,
+              });
+            }
+            break;
+          }
           case 'chat': {
             const delay = get().instantTyping ? 0 : beat.typingDelayMs;
             if (delay > 0) {
@@ -829,8 +935,7 @@ export const useOsStore = create<OsState>((set, get) => {
             });
             appendDebugLog(
               'hook_registered',
-              `Waiting on ${beat.hook.event}: ${beat.hook.target}${
-                beat.hook.targetKnot ? ` -> ${beat.hook.targetKnot}` : ' (pause/continue)'
+              `Waiting on ${beat.hook.event}: ${beat.hook.target}${beat.hook.targetKnot ? ` -> ${beat.hook.targetKnot}` : ' (pause/continue)'
               }`
             );
             break;
@@ -862,8 +967,7 @@ export const useOsStore = create<OsState>((set, get) => {
     for (const hook of matched) {
       appendDebugLog(
         'hook_fired',
-        `Fired ${hook.event} on ${hook.target}${
-          hook.targetKnot ? ` -> ${hook.targetKnot}` : ' (resuming)'
+        `Fired ${hook.event} on ${hook.target}${hook.targetKnot ? ` -> ${hook.targetKnot}` : ' (resuming)'
         }`
       );
 
@@ -984,6 +1088,16 @@ export const useOsStore = create<OsState>((set, get) => {
         });
       }
 
+      // Dynamic notes
+      for (const noteAdd of parsed.noteAdds) {
+        dispatchQueue.push({
+          kind: 'add_note',
+          id: noteAdd.id,
+          title: interpolateTemplate(noteAdd.title, vars),
+          content: interpolateTemplate(noteAdd.content, vars),
+        });
+      }
+
       if (currentChannel === 'chat') {
         lastEmailSenderId = null;
 
@@ -1084,7 +1198,9 @@ export const useOsStore = create<OsState>((set, get) => {
             senderId: currentSenderId,
             subject:
               interpolatedSubject ??
-              (emailSenderChanged ? '(Follow-up)' : undefined),
+              (emailSenderChanged
+                ? getTranslations(get().manifest?.locale).notifications.followUpSubject
+                : undefined),
             line,
             attachments: parsed.attachments,
             flagEmail: parsed.flagEmail,
@@ -1230,6 +1346,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
     notes: [],
     activeNoteId: null,
+    unreadNotesCount: 0,
 
     activeChannel: 'chat',
     activeSenderId: 'system_guide',
@@ -1415,14 +1532,6 @@ export const useOsStore = create<OsState>((set, get) => {
           null;
 
         const initialFiles = buildInitialFiles(manifest, startTimeStr);
-        const initialNotes: NoteItem[] = [
-          {
-            id: 'note_default',
-            title: 'Shift Notes',
-            content: '',
-            updatedAt: startTimeStr,
-          },
-        ];
 
         set({
           scenarioId: resolvedId,
@@ -1498,6 +1607,11 @@ export const useOsStore = create<OsState>((set, get) => {
         }
 
         const initialTemplateVars = collectTemplateVars(resolvedVars);
+        const initialNotes = buildInitialNotes(
+          manifest,
+          startTimeStr,
+          initialTemplateVars
+        );
         const initialDayLabel = interpolateTemplate(
           manifest.dayLabel || 'Day 1',
           initialTemplateVars
@@ -1507,7 +1621,7 @@ export const useOsStore = create<OsState>((set, get) => {
           appPhase: 'desktop',
           pendingScenarioId: null,
           isLoading: false,
-          windows: createDefaultWindows(),
+          windows: createDefaultWindows(manifest.locale),
           focusedApp: 'messages',
           nextZIndex: 14,
           toasts: [],
@@ -1525,7 +1639,8 @@ export const useOsStore = create<OsState>((set, get) => {
           selectedFolder: 'Documents',
           selectedFileId: initialFiles[0]?.id ?? null,
           notes: initialNotes,
-          activeNoteId: initialNotes[0].id,
+          activeNoteId: initialNotes[0]?.id ?? null,
+          unreadNotesCount: 0,
           activeChannel: 'chat',
           activeSenderId: defaultContact ?? 'system_guide',
           activeEmailDraftId: null,
@@ -1580,6 +1695,8 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     openApp: (appId) => {
+      const shouldPersistUnreadNotes =
+        appId === 'notes' && get().unreadNotesCount > 0;
       set((state) => {
         const nextZ = state.nextZIndex + 1;
         const nextWindows = {
@@ -1600,6 +1717,9 @@ export const useOsStore = create<OsState>((set, get) => {
           };
         }
 
+        const nextUnreadNotes =
+          appId === 'notes' ? 0 : state.unreadNotesCount;
+
         return {
           windows: nextWindows,
           focusedApp: appId,
@@ -1607,8 +1727,12 @@ export const useOsStore = create<OsState>((set, get) => {
           startMenuOpen: false,
           notificationsOpen: false,
           unreadChatCounts: nextUnread,
+          unreadNotesCount: nextUnreadNotes,
         };
       });
+      if (shouldPersistUnreadNotes) {
+        persistSnapshot();
+      }
     },
 
     closeApp: (appId) => {
@@ -1652,6 +1776,10 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     focusApp: (appId) => {
+      const shouldPersistUnreadNotes =
+        appId === 'notes' &&
+        get().windows[appId].isOpen &&
+        get().unreadNotesCount > 0;
       set((state) => {
         const win = state.windows[appId];
         if (!win.isOpen) return state;
@@ -1665,6 +1793,9 @@ export const useOsStore = create<OsState>((set, get) => {
           };
         }
 
+        const nextUnreadNotes =
+          appId === 'notes' ? 0 : state.unreadNotesCount;
+
         return {
           windows: {
             ...state.windows,
@@ -1675,8 +1806,12 @@ export const useOsStore = create<OsState>((set, get) => {
           startMenuOpen: false,
           notificationsOpen: false,
           unreadChatCounts: nextUnread,
+          unreadNotesCount: nextUnreadNotes,
         };
       });
+      if (shouldPersistUnreadNotes) {
+        persistSnapshot();
+      }
     },
 
     moveWindow: (appId, position) => {
@@ -1748,6 +1883,9 @@ export const useOsStore = create<OsState>((set, get) => {
       }
       if (notification.actionTarget?.emailId) {
         get().selectEmail(notification.actionTarget.emailId);
+      }
+      if (notification.actionTarget?.noteId) {
+        get().selectNote(notification.actionTarget.noteId);
       }
     },
 
@@ -1886,10 +2024,10 @@ export const useOsStore = create<OsState>((set, get) => {
             emails: s.emails.map((e) =>
               e.id === choice.targetId
                 ? {
-                    ...e,
-                    read: true,
-                    replies: [...e.replies, { text: choice.text, sentAt: timestamp }],
-                  }
+                  ...e,
+                  read: true,
+                  replies: [...e.replies, { text: choice.text, sentAt: timestamp }],
+                }
                 : e
             ),
           }));
@@ -1917,15 +2055,27 @@ export const useOsStore = create<OsState>((set, get) => {
     },
 
     selectNote: (noteId) => {
-      set({ activeNoteId: noteId });
+      const targetNote = get().notes.find((n) => n.id === noteId);
+      if (!targetNote) return;
+
+      set({ activeNoteId: noteId, unreadNotesCount: 0 });
+      appendDebugLog('note_open', `Opened note: "${targetNote.title || targetNote.id}"`);
+
+      const fired = fireMatchingHooks('on_note_open', (hook) =>
+        matchesNoteHookTarget(targetNote, hook.target)
+      );
+      if (!fired) {
+        persistSnapshot();
+      }
     },
 
     createNote: (title) => {
       const nowStr = formatClock24(get().clockMinutes);
       const count = get().notes.length + 1;
+      const t = getTranslations(get().manifest?.locale);
       const note: NoteItem = {
         id: makeId('note'),
-        title: title?.trim() || `Incident Note ${count}`,
+        title: title?.trim() || t.notes.newNoteTitle(count),
         content: '',
         updatedAt: nowStr,
       };

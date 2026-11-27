@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Clock, Plus, StickyNote, Trash2 } from 'lucide-react';
+import { selectTranslations } from '../../engine/i18n';
 import { formatClock24 } from '../../engine/tagParser';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -13,6 +14,7 @@ export function NotesApp() {
   const createNote = useOsStore((s) => s.createNote);
   const updateNote = useOsStore((s) => s.updateNote);
   const deleteNote = useOsStore((s) => s.deleteNote);
+  const t = useOsStore(selectTranslations);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -60,23 +62,23 @@ export function NotesApp() {
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
             <StickyNote className="h-3.5 w-3.5 text-amber-600" />
-            Incident Log
+            {t.notes.headerTitle}
           </div>
           <button
             type="button"
             onClick={() => createNote()}
-            title="New note"
+            title={t.notes.newNoteTooltip}
             className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
           >
             <Plus className="h-3 w-3" />
-            New
+            {t.notes.newButton}
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
           {notes.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-400">
-              No notes yet.
+              {t.notes.noNotes}
             </div>
           ) : (
             notes.map((note) => {
@@ -93,7 +95,7 @@ export function NotesApp() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-semibold text-slate-900">
-                      {note.title || 'Untitled Note'}
+                      {note.title || t.notes.untitledNote}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
                       <span>{note.updatedAt}</span>
@@ -105,7 +107,9 @@ export function NotesApp() {
                       e.stopPropagation();
                       deleteNote(note.id);
                     }}
-                    aria-label={`Delete ${note.title || 'note'}`}
+                    aria-label={t.notes.deleteNoteLabel(
+                      note.title || t.notes.untitledNote
+                    )}
                     className="rounded p-1 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-rose-100 hover:text-rose-600 cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -128,17 +132,17 @@ export function NotesApp() {
                 onChange={(e) =>
                   updateNote(activeNote.id, { title: e.target.value })
                 }
-                placeholder="Note title..."
+                placeholder={t.notes.noteTitlePlaceholder}
                 className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
               />
               <button
                 type="button"
                 onClick={handleStampTime}
-                title="Insert current in-world timestamp at cursor"
+                title={t.notes.stampTimeTitle}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:border-[#0067c0] hover:bg-[#eef6fc] hover:text-[#004e96] cursor-pointer"
               >
                 <Clock className="h-3 w-3 text-[#0067c0]" />
-                Stamp Time ({formatClock24(clockMinutes)})
+                {t.notes.stampTime(formatClock24(clockMinutes))}
               </button>
             </header>
 
@@ -148,29 +152,29 @@ export function NotesApp() {
               onChange={(e) =>
                 updateNote(activeNote.id, { content: e.target.value })
               }
-              placeholder="Record observations, badge IDs, timestamps, or response decisions..."
+              placeholder={t.notes.contentPlaceholder}
               className="flex-1 w-full resize-none bg-white p-4 font-mono text-[13px] leading-relaxed text-slate-800 outline-none placeholder:text-slate-400"
             />
 
             <footer className="flex items-center justify-between border-t border-slate-200 bg-[#f8f9fa] px-4 py-1.5 text-[11px] text-slate-500">
               <span>
-                {dayLabel} · Updated {activeNote.updatedAt}
+                {dayLabel} · {t.notes.updatedAt(activeNote.updatedAt)}
               </span>
               <span className="font-mono">
-                {wordCount} words · {lineCount} lines · Autosaved
+                {t.notes.stats(wordCount, lineCount)}
               </span>
             </footer>
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-xs text-slate-400">
             <StickyNote className="h-8 w-8 opacity-35" />
-            <p>Create a note to start logging shift details.</p>
+            <p>{t.notes.emptyState}</p>
             <button
               type="button"
               onClick={() => createNote()}
               className="mt-1 rounded border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
             >
-              + New Note
+              {t.notes.newNoteButton}
             </button>
           </div>
         )}

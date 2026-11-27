@@ -39,6 +39,7 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
   "title": "First Morning — Meridian Archive",
   "subtitle": "Day 1 Shift · Archive Operations",
   "description": "Short summary shown in Scenario Selector.",
+  "locale": "en",
   "startTime": "09:00",
   "dayLabel": "Monday · Day 1",
   "storyFile": "story.ink",
@@ -78,18 +79,27 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
       "sizeLabel": "2.4 KB",
       "unlockedByDefault": false
     }
+  ],
+  "initialNotes": [
+    {
+      "id": "shift_checklist",
+      "title": "Shift Checklist — {{player_name}}",
+      "content": "- Review incoming messages\n- Verify access log timestamps",
+      "updatedAt": "09:00"
+    }
   ]
 }
 ```
 
 ### Field Notes
+- `locale` (optional): UI language for OS chrome, apps, notifications, and Scenario Selector (`"en"` | `"nl"`, defaults to `"en"`). Note that internal `files[].folder` enum values in `scenario.json` must remain `"Documents" | "Images" | "Voice Notes" | "Downloads"` even when `locale` is `"nl"`.
 - `startTime`: 24-hour `"HH:MM"` string (e.g. `"09:00"`).
 - `playerPrompt` (optional): Prompts the player for a pre-start variable (typically their name) before launching a fresh scenario:
   - `enabled`: Boolean (defaults to `true` when `playerPrompt` is present).
   - `variableName`: Ink & template variable identifier (defaults to `"player_name"`). Declare `VAR player_name = "Default"` in `story.ink` to use `{player_name}` in dialogue, choices, and `# TAG` directives.
   - `label`, `placeholder`, `helperText`, `defaultValue`: Form UI copy.
   - `required`: Boolean (defaults to `true`).
-  - **Markdown & Template Interpolation:** Use `{{player_name}}` (or `{{any_ink_global}}`) inside `docs/*.md`, voice note transcripts, and manifest labels (`dayLabel`).
+  - **Markdown & Template Interpolation:** Use `{{player_name}}` (or `{{any_ink_global}}`) inside `docs/*.md`, voice note transcripts, `initialNotes`, `# NOTE_ADD`, and manifest labels (`dayLabel`).
 - `theme` (optional): Customize OS branding and desktop background without writing React code:
   - `osName`: Start Menu & taskbar branding (defaults to `"Curu-OS"`).
   - `osVersion`: Start Menu version badge (defaults to `"v0.1"`).
@@ -103,6 +113,10 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
 - `files[].folder`: `"Documents" | "Images" | "Voice Notes" | "Downloads"`.
 - `files[].kind`: `"markdown" | "image" | "audio" | "text"`.
 - `files[].unlockedByDefault`: Set `true` for starting workspace files; otherwise leave `false` and unlock dynamically with `# ATTACHMENT`, `# VOICE_NOTE`, or `# FILE_UNLOCK`.
+- `initialNotes` (optional): Pre-populates the **Notes** app when starting a fresh scenario (falls back to a blank `"Shift Notes"` entry when omitted or empty):
+  - `id` (optional): Stable note ID used by `# EVENT_HOOK: on_note_open:<id>` (auto-generated as `note_init_<n>` if omitted).
+  - `title` & `content`: Strings supporting `{{template}}` variable interpolation.
+  - `updatedAt` (optional): Timestamp label (defaults to `startTime`).
 
 ---
 
@@ -118,6 +132,7 @@ Curu-OS interprets Ink `#` tags attached to story lines and choices as desktop O
 | `# VOICE_NOTE: <path> \| duration: <mm:ss> \| transcript: <text>` | Sends a playable voice message bubble in Messages and registers the file in `Voice Notes` and `Downloads`. Escape `\|` inside `.ink` files (`\\|` in source) because `|` is an Ink delimiter. If the audio file is absent, Curu-OS plays a synthesized cadence fallback automatically. |
 | `# ATTACHMENT: <path>` | Attaches a clickable file card to the current chat message or email and registers it in File Explorer (`Unified Media Routing`). |
 | `# FILE_UNLOCK: <path>` | Unlocks a file directly in File Explorer (optional `\| folder: Documents \| name: Custom.md`). |
+| `# NOTE_ADD: <title> \| content: <text>` | Appends a new note in **Notes** stamped with the current clock, shows a toast notification, and increments the Notes unread badge until opened. Supports optional `\| id: <note_id>`, `\\|` escaping in `.ink`, `\n` line breaks, and `{{template}}` vars. |
 | `# ADVANCE_TIME: <minutes>` | Advances the in-world taskbar clock by `<minutes>` integer minutes. |
 | `# SET_TIME: <HH:MM>` | Sets the in-world taskbar clock directly to 24-hour `<HH:MM>` (e.g., `14:30`). |
 | `# SET_DAY: <label>` | Updates the current day/phase label shown in the System Tray and Notifications header (e.g., `Phase 2 · Escalation`). |
@@ -126,6 +141,7 @@ Curu-OS interprets Ink `#` tags attached to story lines and choices as desktop O
 | `# EVENT_HOOK: on_file_open:<path> => <knot>` | Fires when `<path>` is opened in File Explorer (`=> <knot>` jumps to `<knot>`; omit `=> <knot>` to pause and resume `Continue()`). Use `=>` instead of `->` in `.ink` files. |
 | `# EVENT_HOOK: on_audio_play:<path> [=> <knot>]` | Fires when `<path>` starts playing in Messages or File Explorer (works with both real audio and simulated fallback). |
 | `# EVENT_HOOK: on_email_read:<matcher> [=> <knot>]` | Fires when a matching email is opened in Mail (`sender:<id>`, `subject:<text>`, or bare `<id_or_subject>`). |
+| `# EVENT_HOOK: on_note_open:<id_or_title> [=> <knot>]` | Fires when a matching note is selected in Notes (`id:<note_id>`, `title:<text>`, or bare `<id_or_title>`). |
 | `# FLAG_EMAIL` | Marks the active email as flagged in Mail. |
 | `# TYPING_DELAY: <ms>` | Overrides typing indicator duration in ms for the current chat line. |
 | `# SILENT` | Placed on an Ink choice to avoid echoing the choice text as an outgoing player chat bubble. |

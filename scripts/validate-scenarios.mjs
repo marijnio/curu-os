@@ -93,7 +93,12 @@ function scanInkTags(inkSource) {
       const lineNum = lineIdx + 1;
 
       if (!value) {
-        if (key === 'SET_TIME' || key === 'CONTACT_STATUS' || key === 'EVENT_HOOK') {
+        if (
+          key === 'SET_TIME' ||
+          key === 'CONTACT_STATUS' ||
+          key === 'EVENT_HOOK' ||
+          key === 'NOTE_ADD'
+        ) {
           tagErrors.push({ lineNum, message: `Empty value in # ${key}` });
         }
         continue;
@@ -131,15 +136,39 @@ function scanInkTags(inkSource) {
         assets.push({ path: value, kind: key, lineNum });
       } else if (key === 'VOICE_NOTE') {
         assets.push({ path: value, kind: 'VOICE_NOTE', lineNum, isAudio: true });
+      } else if (key === 'NOTE_ADD') {
+        for (const extra of pipeParts.slice(1)) {
+          const extraColon = extra.indexOf(':');
+          if (extraColon === -1) {
+            tagErrors.push({
+              lineNum,
+              message: `Invalid # NOTE_ADD parameter "${extra}" (expected content:<text> or id:<note_id>)`,
+            });
+            continue;
+          }
+          const paramKey = extra.slice(0, extraColon).trim().toLowerCase();
+          const paramVal = extra.slice(extraColon + 1).trim();
+          if (paramKey !== 'content' && paramKey !== 'id') {
+            tagErrors.push({
+              lineNum,
+              message: `Unknown # NOTE_ADD parameter "${paramKey}" (expected content or id)`,
+            });
+          } else if (paramKey === 'id' && !paramVal) {
+            tagErrors.push({
+              lineNum,
+              message: 'Empty id in # NOTE_ADD',
+            });
+          }
+        }
       } else if (key === 'EVENT_HOOK') {
         const match =
-          /^(on_file_open|on_audio_play|on_email_read):(.*?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
+          /^(on_file_open|on_audio_play|on_email_read|on_note_open):(.*?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
             value
           );
         if (!match) {
           tagErrors.push({
             lineNum,
-            message: `Invalid # EVENT_HOOK "${value}" (expected on_file_open:<path>, on_audio_play:<path>, or on_email_read:<matcher>)`,
+            message: `Invalid # EVENT_HOOK "${value}" (expected on_file_open:<path>, on_audio_play:<path>, on_email_read:<matcher>, or on_note_open:<id_or_title>)`,
           });
         } else {
           const eventKind = match[1].toLowerCase();
@@ -266,6 +295,16 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
       errors.push(`[${scenarioId}] scenario.json is missing required string "title".`);
     }
 
+    if (
+      manifest.locale !== undefined &&
+      manifest.locale !== 'en' &&
+      manifest.locale !== 'nl'
+    ) {
+      errors.push(
+        `[${scenarioId}] scenario.json "locale" must be "en" or "nl" when provided (got ${JSON.stringify(manifest.locale)}).`
+      );
+    }
+
     if (typeof manifest.startTime !== 'string' || !/^\d{1,2}:\d{2}$/.test(manifest.startTime)) {
       errors.push(
         `[${scenarioId}] scenario.json "startTime" must be a 24-hour "HH:MM" string (got ${JSON.stringify(manifest.startTime)}).`
@@ -314,6 +353,43 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
           treatMissingAsWarning: fileEntry.kind === 'audio',
           errors,
           warnings,
+        });
+      }
+    }
+
+    if (manifest.initialNotes !== undefined) {
+      if (!Array.isArray(manifest.initialNotes)) {
+        errors.push(`[${scenarioId}] scenario.json "initialNotes" must be an array when provided.`);
+      } else {
+        const seenNoteIds = new Set();
+        manifest.initialNotes.forEach((noteEntry, idx) => {
+          if (!noteEntry || typeof noteEntry !== 'object' || Array.isArray(noteEntry)) {
+            errors.push(`[${scenarioId}] scenario.json initialNotes[${idx}] must be an object.`);
+            return;
+          }
+          if (typeof noteEntry.title !== 'string' || !noteEntry.title.trim()) {
+            errors.push(`[${scenarioId}] scenario.json initialNotes[${idx}] is missing a non-empty string "title".`);
+          }
+          if (typeof noteEntry.content !== 'string') {
+            errors.push(`[${scenarioId}] scenario.json initialNotes[${idx}] must have a string "content".`);
+          }
+          if (noteEntry.id !== undefined) {
+            if (typeof noteEntry.id !== 'string' || !noteEntry.id.trim()) {
+              errors.push(`[${scenarioId}] scenario.json initialNotes[${idx}].id must be a non-empty string when provided.`);
+            } else {
+              const trimmedId = noteEntry.id.trim();
+              if (seenNoteIds.has(trimmedId)) {
+                errors.push(`[${scenarioId}] Duplicate initialNotes id "${trimmedId}" in scenario.json.`);
+              }
+              seenNoteIds.add(trimmedId);
+            }
+          }
+          if (
+            noteEntry.updatedAt !== undefined &&
+            (typeof noteEntry.updatedAt !== 'string' || !noteEntry.updatedAt.trim())
+          ) {
+            errors.push(`[${scenarioId}] scenario.json initialNotes[${idx}].updatedAt must be a non-empty string when provided.`);
+          }
         });
       }
     }

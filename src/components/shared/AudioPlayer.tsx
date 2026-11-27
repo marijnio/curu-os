@@ -6,6 +6,7 @@ import {
   SimulatedVoicePlayback,
 } from '../../engine/audioFallback';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
+import { selectTranslations } from '../../engine/i18n';
 import { interpolateTemplate } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -43,6 +44,7 @@ export function AudioPlayer({
   const scenarioId = useOsStore((s) => s.scenarioId);
   const muted = useOsStore((s) => s.muted);
   const templateVars = useOsStore((s) => s.templateVars);
+  const t = useOsStore(selectTranslations);
 
   const audioUrl = useMemo(
     () => resolveScenarioAssetUrl(scenarioId, path),
@@ -199,7 +201,9 @@ export function AudioPlayer({
         <button
           type="button"
           onClick={() => void togglePlay()}
-          aria-label={isPlaying ? 'Pause voice note' : 'Play voice note'}
+          aria-label={
+            isPlaying ? t.shared.pauseVoiceNote : t.shared.playVoiceNote
+          }
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0067c0] text-white transition hover:bg-[#005aa8] active:scale-95 cursor-pointer"
         >
           {isPlaying ? (
@@ -213,7 +217,7 @@ export function AudioPlayer({
           <div
             role="slider"
             tabIndex={0}
-            aria-label="Audio playback progress"
+            aria-label={t.shared.audioProgress}
             aria-valuemin={0}
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(currentTime)}
@@ -250,7 +254,7 @@ export function AudioPlayer({
                   ) : (
                     <Volume2 className="h-2.5 w-2.5" />
                   )}
-                  Simulated
+                  {t.shared.simulated}
                 </span>
               )}
               {transcript && variant === 'compact' && (
@@ -260,7 +264,7 @@ export function AudioPlayer({
                   className="inline-flex items-center gap-1 text-[#0067c0] hover:underline cursor-pointer"
                 >
                   <FileText className="h-3 w-3" />
-                  {showTranscript ? 'Hide' : 'Transcript'}
+                  {showTranscript ? t.shared.hide : t.shared.transcript}
                 </button>
               )}
               {onOpenInExplorer && (
@@ -269,7 +273,7 @@ export function AudioPlayer({
                   onClick={onOpenInExplorer}
                   className="text-slate-600 hover:text-slate-900 underline decoration-slate-400 cursor-pointer"
                 >
-                  Open File
+                  {t.shared.openFile}
                 </button>
               )}
             </span>
@@ -280,7 +284,7 @@ export function AudioPlayer({
       {transcript && showTranscript && (
         <div className="mt-2.5 rounded border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700">
           <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Auto-Transcript
+            {t.shared.autoTranscript}
           </span>
           {interpolateTemplate(transcript, templateVars)}
         </div>

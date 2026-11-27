@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { selectTranslations } from '../../engine/i18n';
 import { normalizePlayerPrompt } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 import { AttachmentCard } from '../shared/AttachmentCard';
@@ -24,6 +25,7 @@ export function MailApp() {
   const selectEmail = useOsStore((s) => s.selectEmail);
   const toggleEmailFlag = useOsStore((s) => s.toggleEmailFlag);
   const selectChoice = useOsStore((s) => s.selectChoice);
+  const t = useOsStore(selectTranslations);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'unread' | 'flagged'>('all');
@@ -52,8 +54,9 @@ export function MailApp() {
     return haystack.includes(normalizedQuery);
   });
 
-  const activeEmail =
-    emails.find((e) => e.id === activeEmailId) ?? filteredEmails[0] ?? null;
+  const activeEmail = activeEmailId
+    ? (emails.find((e) => e.id === activeEmailId) ?? null)
+    : null;
 
   const emailChoices = activeEmail
     ? activeChoices.filter(
@@ -73,11 +76,11 @@ export function MailApp() {
         <div className="flex items-center justify-between border-b border-slate-200 px-3.5 py-2.5">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
             <Inbox className="h-4 w-4 text-[#0067c0]" />
-            Inbox
+            {t.mail.inbox}
           </div>
           {unreadCount > 0 && (
             <span className="rounded bg-[#e5f1fb] px-2 py-0.5 text-[10px] font-semibold text-[#005aa8]">
-              {unreadCount} unread
+              {t.mail.unreadBadge(unreadCount)}
             </span>
           )}
         </div>
@@ -90,14 +93,14 @@ export function MailApp() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search mail..."
+              placeholder={t.mail.searchPlaceholder}
               className="w-full rounded border border-slate-200 bg-[#f8f9fa] py-1 pr-6 pl-7 text-[11px] text-slate-800 outline-none focus:border-[#0067c0] focus:bg-white"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                aria-label="Clear mail search"
+                aria-label={t.mail.clearSearch}
                 className="absolute right-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -116,7 +119,7 @@ export function MailApp() {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {mode}
+                {t.mail.filters[mode]}
               </button>
             ))}
           </div>
@@ -126,8 +129,8 @@ export function MailApp() {
           {filteredEmails.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400">
               {sortedEmails.length === 0
-                ? 'Your inbox is currently empty.'
-                : 'No emails match your filter.'}
+                ? t.mail.emptyInbox
+                : t.mail.noMatchingEmails}
             </div>
           ) : (
             filteredEmails.map((email) => {
@@ -172,7 +175,7 @@ export function MailApp() {
                           e.stopPropagation();
                           toggleEmailFlag(email.id);
                         }}
-                        aria-label="Toggle flag"
+                        aria-label={t.mail.toggleFlag}
                         className="rounded p-0.5 hover:bg-slate-200 cursor-pointer"
                       >
                         <Flag
@@ -232,7 +235,7 @@ export function MailApp() {
                       activeEmail.flagged ? 'fill-amber-500 text-amber-500' : ''
                     }`}
                   />
-                  {activeEmail.flagged ? 'Flagged' : 'Flag'}
+                  {activeEmail.flagged ? t.mail.flagged : t.mail.flag}
                 </button>
               </div>
 
@@ -257,7 +260,8 @@ export function MailApp() {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          To: {playerName || 'You'} · {sender?.role ?? 'Staff'}
+                          {t.mail.toLabel} {playerName || t.mail.you} ·{' '}
+                          {sender?.role ?? t.mail.staff}
                         </div>
                       </div>
                     </div>
@@ -283,7 +287,7 @@ export function MailApp() {
                 <div className="border-t border-slate-200 pt-4">
                   <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     <Paperclip className="h-3.5 w-3.5" />
-                    Attachments ({activeEmail.attachments.length})
+                    {t.mail.attachments(activeEmail.attachments.length)}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {activeEmail.attachments.map((attPath) => (
@@ -303,7 +307,7 @@ export function MailApp() {
                       <div className="mb-1 flex items-center justify-between text-[11px] text-[#005aa8]">
                         <span className="inline-flex items-center gap-1.5 font-semibold">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Sent Reply
+                          {t.mail.sentReply}
                         </span>
                         <span className="font-mono">{reply.sentAt}</span>
                       </div>
@@ -321,7 +325,7 @@ export function MailApp() {
               <footer className="border-t border-slate-200 bg-[#f8f9fa] px-6 py-3.5">
                 <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   <Reply className="h-3.5 w-3.5 text-[#0067c0]" />
-                  Reply Actions
+                  {t.mail.replyActions}
                 </div>
                 <div className="flex flex-col gap-2">
                   {emailChoices.map((choice) => (
@@ -333,7 +337,7 @@ export function MailApp() {
                     >
                       <span>{choice.text}</span>
                       <span className="ml-3 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[#0067c0]">
-                        Send
+                        {t.mail.send}
                       </span>
                     </button>
                   ))}
@@ -344,7 +348,7 @@ export function MailApp() {
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-slate-400">
             <MailOpen className="mb-2 h-9 w-9 opacity-35" />
-            <p className="text-xs">Select an email to read.</p>
+            <p className="text-xs">{t.mail.selectEmail}</p>
           </div>
         )}
       </section>

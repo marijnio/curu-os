@@ -1,4 +1,5 @@
 import { FileText, Image as ImageIcon, Mic, ExternalLink, File } from 'lucide-react';
+import { selectTranslations } from '../../engine/i18n';
 import { inferFileMeta, normalizeScenarioPath } from '../../engine/tagParser';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -12,6 +13,7 @@ export function AttachmentCard({ path, compact = false }: AttachmentCardProps) {
   const files = useOsStore((s) => s.files);
   const manifest = useOsStore((s) => s.manifest);
   const openFileInExplorer = useOsStore((s) => s.openFileInExplorer);
+  const t = useOsStore(selectTranslations);
 
   const file =
     files.find((f) => f.id === normalized) ??
@@ -48,13 +50,13 @@ export function AttachmentCard({ path, compact = false }: AttachmentCardProps) {
             {name}
           </div>
           <div className="truncate text-[11px] text-slate-500">
-            {folder} · {kind === 'markdown' ? 'Document' : kind.toUpperCase()}
+            {t.folders[folder]} · {t.fileKinds[kind]}
           </div>
         </div>
       </div>
 
       <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#0067c0]">
-        Open
+        {t.shared.open}
         <ExternalLink className="h-3 w-3" />
       </span>
     </button>

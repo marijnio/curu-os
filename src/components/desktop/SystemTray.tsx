@@ -1,5 +1,10 @@
 import { Bell, Volume2, VolumeX } from 'lucide-react';
-import { formatClock24, getTimeOfDay } from '../../engine/tagParser';
+import {
+  getLocalizedTimeOfDay,
+  selectLocale,
+  selectTranslations,
+} from '../../engine/i18n';
+import { formatClock24 } from '../../engine/tagParser';
 import { useOsStore } from '../../store/useOsStore';
 
 export function SystemTray() {
@@ -12,9 +17,11 @@ export function SystemTray() {
   const toggleNotifications = useOsStore((s) => s.toggleNotifications);
   const markAllNotificationsRead = useOsStore((s) => s.markAllNotificationsRead);
   const clickNotification = useOsStore((s) => s.clickNotification);
+  const locale = useOsStore(selectLocale);
+  const t = useOsStore(selectTranslations);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
-  const timeOfDay = getTimeOfDay(clockMinutes);
+  const timeOfDay = getLocalizedTimeOfDay(clockMinutes, locale);
   const clockText = formatClock24(clockMinutes);
 
   return (
@@ -22,7 +29,7 @@ export function SystemTray() {
       <button
         type="button"
         onClick={toggleMuted}
-        title={muted ? 'Unmute audio' : 'Mute audio'}
+        title={muted ? t.systemTray.unmuteAudio : t.systemTray.muteAudio}
         className="flex h-10 w-8 items-center justify-center text-slate-200 transition-colors hover:bg-[#22262e]"
       >
         {muted ? (
@@ -38,7 +45,7 @@ export function SystemTray() {
           e.stopPropagation();
           toggleNotifications();
         }}
-        title="Notifications"
+        title={t.systemTray.notifications}
         className="relative flex h-10 w-8 items-center justify-center text-slate-200 transition-colors hover:bg-[#22262e]"
       >
         <Bell className="h-3.5 w-3.5" />
@@ -71,7 +78,7 @@ export function SystemTray() {
         >
           <div className="flex items-center justify-between border-b border-[#2c313b] bg-[#14171c] px-3.5 py-2.5">
             <div className="text-xs font-semibold text-slate-200">
-              Notifications
+              {t.systemTray.notifications}
               {dayLabel && (
                 <span className="ml-2 font-normal text-slate-400">
                   {dayLabel}
@@ -84,7 +91,7 @@ export function SystemTray() {
                 onClick={markAllNotificationsRead}
                 className="text-[11px] text-[#4ca3dd] hover:underline"
               >
-                Clear unread
+                {t.systemTray.clearUnread}
               </button>
             )}
           </div>
@@ -92,7 +99,7 @@ export function SystemTray() {
           <div className="max-h-72 overflow-y-auto divide-y divide-[#282c36]">
             {notifications.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-400">
-                No new notifications.
+                {t.systemTray.noNotifications}
               </div>
             ) : (
               notifications.map((n) => (

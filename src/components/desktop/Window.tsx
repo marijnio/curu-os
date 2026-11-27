@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import { Minus, Square, Copy, X } from 'lucide-react';
 import type { WindowState } from '../../types/os';
+import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 
 interface WindowProps {
@@ -37,6 +38,8 @@ export function Window({ windowState, icon, children }: WindowProps) {
   const toggleMaximizeApp = useOsStore((s) => s.toggleMaximizeApp);
   const moveWindow = useOsStore((s) => s.moveWindow);
   const resizeWindow = useOsStore((s) => s.resizeWindow);
+  const t = useOsStore(selectTranslations);
+  const title = t.apps[windowState.id] ?? windowState.title;
 
   const dragStartRef = useRef<{
     pointerX: number;
@@ -225,14 +228,14 @@ export function Window({ windowState, icon, children }: WindowProps) {
       >
         <div className="flex items-center gap-2 text-xs font-normal">
           <span className="flex items-center">{icon}</span>
-          <span>{windowState.title}</span>
+          <span>{title}</span>
         </div>
 
         <div className="flex h-full items-stretch">
           <button
             type="button"
             onClick={() => minimizeApp(windowState.id)}
-            aria-label={`Minimize ${windowState.title}`}
+            aria-label={t.window.minimize(title)}
             className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-slate-200/80 hover:text-slate-950"
           >
             <Minus className="h-3.5 w-3.5" />
@@ -240,7 +243,9 @@ export function Window({ windowState, icon, children }: WindowProps) {
           <button
             type="button"
             onClick={() => toggleMaximizeApp(windowState.id)}
-            aria-label={windowState.isMaximized ? 'Restore window' : 'Maximize window'}
+            aria-label={
+              windowState.isMaximized ? t.window.restore : t.window.maximize
+            }
             className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-slate-200/80 hover:text-slate-950"
           >
             {windowState.isMaximized ? (
@@ -252,7 +257,7 @@ export function Window({ windowState, icon, children }: WindowProps) {
           <button
             type="button"
             onClick={() => closeApp(windowState.id)}
-            aria-label={`Close ${windowState.title}`}
+            aria-label={t.window.close(title)}
             className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-[#e81123] hover:text-white"
           >
             <X className="h-3.5 w-3.5" />

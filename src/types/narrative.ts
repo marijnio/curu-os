@@ -40,7 +40,11 @@ export interface ActiveChoice {
   silent?: boolean;
 }
 
-export type EventHookType = 'on_file_open' | 'on_audio_play' | 'on_email_read';
+export type EventHookType =
+  | 'on_file_open'
+  | 'on_audio_play'
+  | 'on_email_read'
+  | 'on_note_open';
 
 export interface EventHook {
   id: string;
@@ -63,6 +67,7 @@ export interface DebugLogEntry {
     | 'file_open'
     | 'audio_play'
     | 'email_read'
+    | 'note_open'
     | 'checkpoint'
     | 'director'
     | 'error';

@@ -2,6 +2,7 @@ import { Compiler, CompilerOptions, JsonFileHandler, Story } from 'inkjs/full';
 import type {
   PlayerPromptConfig,
   ScenarioIndexEntry,
+  ScenarioLocale,
   ScenarioManifest,
   ScenarioTheme,
 } from '../types/scenario';
@@ -19,6 +20,7 @@ export interface ScenarioSummary {
   title: string;
   subtitle: string;
   description: string;
+  locale?: ScenarioLocale;
   playerPrompt?: PlayerPromptConfig;
   theme?: ScenarioTheme;
 }
@@ -69,6 +71,7 @@ export async function fetchScenarioIndex(): Promise<ScenarioSummary[]> {
           title: manifest.title || entry.title || entry.id,
           subtitle: manifest.subtitle || '',
           description: manifest.description || '',
+          locale: manifest.locale,
           playerPrompt: manifest.playerPrompt,
           theme: manifest.theme,
         };

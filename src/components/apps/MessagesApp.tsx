@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Pin, MessageCircle, Lock } from 'lucide-react';
+import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 import { AudioPlayer } from '../shared/AudioPlayer';
 import { AttachmentCard } from '../shared/AttachmentCard';
@@ -17,6 +18,7 @@ export function MessagesApp() {
   const selectContact = useOsStore((s) => s.selectContact);
   const selectChoice = useOsStore((s) => s.selectChoice);
   const openFileInExplorer = useOsStore((s) => s.openFileInExplorer);
+  const t = useOsStore(selectTranslations);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,9 +57,9 @@ export function MessagesApp() {
 
     const preview = lastMsg
       ? lastMsg.kind === 'voice_note'
-        ? 'Voice message'
+        ? t.messages.voiceMessagePreview
         : lastMsg.kind === 'attachment'
-          ? 'Sent a file'
+          ? t.messages.attachmentPreview
           : lastMsg.text
       : contact.role;
 
@@ -120,7 +122,7 @@ export function MessagesApp() {
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-[#f7f8fa]">
         <div className="border-b border-slate-200 px-3.5 py-2.5">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            Contacts
+            {t.messages.contacts}
           </div>
         </div>
 
@@ -129,7 +131,7 @@ export function MessagesApp() {
             <div>
               <div className="mb-1 flex items-center gap-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 <Pin className="h-3 w-3 text-[#0067c0]" />
-                Pinned
+                {t.messages.pinned}
               </div>
               <div>{pinnedContacts.map(renderContactRow)}</div>
             </div>
@@ -138,7 +140,7 @@ export function MessagesApp() {
           {regularContacts.length > 0 && (
             <div>
               <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Colleagues
+                {t.messages.colleagues}
               </div>
               <div>{regularContacts.map(renderContactRow)}</div>
             </div>
@@ -169,7 +171,7 @@ export function MessagesApp() {
                 </div>
               </div>
               <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                Internal Chat
+                {t.messages.internalChat}
               </span>
             </header>
 
@@ -178,7 +180,9 @@ export function MessagesApp() {
               {threadMessages.length === 0 && !isTyping && (
                 <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
                   <MessageCircle className="mb-2 h-8 w-8 opacity-40" />
-                  <p className="text-xs">No messages with {activeContact.name} yet.</p>
+                  <p className="text-xs">
+                    {t.messages.noMessagesWith(activeContact.name)}
+                  </p>
                 </div>
               )}
 
@@ -251,7 +255,7 @@ export function MessagesApp() {
               {threadChoices.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Choose a reply
+                    {t.messages.chooseReply}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {threadChoices.map((choice) => (
@@ -271,18 +275,20 @@ export function MessagesApp() {
                   <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                   <span>
                     {isTyping
-                      ? `${activeContact.name} is typing...`
+                      ? t.messages.isTyping(activeContact.name)
                       : pendingHooks.length > 0
                         ? pendingHooks[0].event === 'on_audio_play'
-                          ? 'Listen to the voice note to continue.'
+                          ? t.messages.hookAudio
                           : pendingHooks[0].event === 'on_email_read'
-                            ? 'Open and read the incoming email in Mail to continue.'
-                            : 'Open the shared file in File Explorer to continue.'
+                            ? t.messages.hookEmail
+                            : pendingHooks[0].event === 'on_note_open'
+                              ? t.messages.hookNote
+                              : t.messages.hookFile
                         : activeChoices.some((c) => c.channel === 'email')
-                          ? 'A reply is waiting in Mail.'
+                          ? t.messages.waitingInMail
                           : activeChoices.length > 0
-                            ? 'Active conversation is in another thread.'
-                            : 'No reply needed right now.'}
+                            ? t.messages.activeInOtherThread
+                            : t.messages.noReplyNeeded}
                   </span>
                 </div>
               )}
@@ -290,7 +296,7 @@ export function MessagesApp() {
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-xs text-slate-400">
-            Select a contact to view messages.
+            {t.messages.selectContact}
           </div>
         )}
       </section>

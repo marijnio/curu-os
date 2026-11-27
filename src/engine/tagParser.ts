@@ -13,6 +13,12 @@ export interface ParsedFileUnlockTag {
   name?: string;
 }
 
+export interface ParsedNoteAddTag {
+  id?: string;
+  title: string;
+  content: string;
+}
+
 export interface ParsedEventHookTag {
   event: EventHookType;
   target: string;
@@ -32,6 +38,7 @@ export interface ParsedTagBundle {
   voiceNote?: ParsedVoiceNoteTag;
   attachments: string[];
   fileUnlocks: ParsedFileUnlockTag[];
+  noteAdds: ParsedNoteAddTag[];
   advanceMinutes: number;
   setTimeMinutes?: number;
   setDayLabel?: string;
@@ -128,6 +135,7 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
   const bundle: ParsedTagBundle = {
     attachments: [],
     fileUnlocks: [],
+    noteAdds: [],
     advanceMinutes: 0,
     contactUnlocks: [],
     contactStatuses: [],
@@ -215,6 +223,25 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
         bundle.fileUnlocks.push({ path, folder, name });
         break;
       }
+      case 'NOTE_ADD': {
+        if (!value) {
+          bundle.unknownTags.push(trimmed);
+          break;
+        }
+        let id: string | undefined;
+        let content = '';
+        for (const extra of parts.slice(1)) {
+          const kv = splitKeyColon(extra);
+          if (!kv) continue;
+          if (kv.key === 'CONTENT') {
+            content = kv.value.replace(/\\n/g, '\n');
+          } else if (kv.key === 'ID' && kv.value) {
+            id = kv.value;
+          }
+        }
+        bundle.noteAdds.push({ id, title: value, content });
+        break;
+      }
       case 'ADVANCE_TIME': {
         const mins = Number.parseInt(value, 10);
         if (!Number.isNaN(mins) && mins > 0) {
@@ -274,15 +301,16 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
         // on_file_open:<path> [=> <knot>]
         // on_audio_play:<path> [=> <knot>]
         // on_email_read:<sender_or_subject> [=> <knot>]
+        // on_note_open:<id_or_title> [=> <knot>]
         const hookMatch =
-          /^(on_file_open|on_audio_play|on_email_read):(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
+          /^(on_file_open|on_audio_play|on_email_read|on_note_open):(.+?)(?:\s*(?:=>|->)\s*([A-Za-z0-9_.]+))?$/i.exec(
             value
           );
         if (hookMatch) {
           const event = hookMatch[1].toLowerCase() as EventHookType;
           const rawTarget = hookMatch[2].trim();
           const target =
-            event === 'on_email_read'
+            event === 'on_email_read' || event === 'on_note_open'
               ? rawTarget
               : normalizeScenarioPath(rawTarget);
           const targetKnot = hookMatch[3]?.trim();
