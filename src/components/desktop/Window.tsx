@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { Minus, Square, Copy, X } from 'lucide-react';
-import type { AppId, WindowState } from '../../types/os';
+import type { WindowState } from '../../types/os';
 import { useOsStore } from '../../store/useOsStore';
 
 interface WindowProps {
@@ -56,9 +56,12 @@ export function Window({ windowState, icon, children }: WindowProps) {
     const dy = e.clientY - dragStartRef.current.pointerY;
 
     const maxX = Math.max(80, window.innerWidth - 160);
-    const maxY = Math.max(80, window.innerHeight - 96);
+    const maxY = Math.max(80, window.innerHeight - 80);
 
-    const nextX = Math.max(-windowState.size.width + 180, Math.min(maxX, dragStartRef.current.originX + dx));
+    const nextX = Math.max(
+      -windowState.size.width + 180,
+      Math.min(maxX, dragStartRef.current.originX + dx)
+    );
     const nextY = Math.max(0, Math.min(maxY, dragStartRef.current.originY + dy));
 
     moveWindow(windowState.id, { x: nextX, y: nextY });
@@ -78,37 +81,26 @@ export function Window({ windowState, icon, children }: WindowProps) {
         top: 0,
         left: 0,
         right: 0,
-        bottom: 48,
+        bottom: 40,
         zIndex: windowState.zIndex,
       }
     : {
         left: windowState.position.x,
         top: windowState.position.y,
         width: `min(${windowState.size.width}px, calc(100vw - 24px))`,
-        height: `min(${windowState.size.height}px, calc(100vh - 64px))`,
+        height: `min(${windowState.size.height}px, calc(100vh - 56px))`,
         zIndex: windowState.zIndex,
       };
-
-  const appAccent: Record<AppId, string> = {
-    messages: 'text-emerald-400',
-    mail: 'text-sky-400',
-    explorer: 'text-amber-400',
-    director: 'text-violet-400',
-  };
 
   return (
     <div
       style={style}
       onPointerDown={() => focusApp(windowState.id)}
-      className={`fixed flex flex-col overflow-hidden border bg-slate-900/95 backdrop-blur-md shadow-2xl transition-shadow ${
-        windowState.isMaximized ? 'rounded-none' : 'rounded-xl'
-      } ${
-        isFocused
-          ? 'border-slate-500/70 shadow-slate-950/80'
-          : 'border-slate-700/60 shadow-slate-950/50'
-      }`}
+      className={`fixed flex flex-col overflow-hidden border bg-white text-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.42)] ${
+        windowState.isMaximized ? 'rounded-none border-none' : 'rounded-[3px]'
+      } ${isFocused ? 'border-[#2b3b55]' : 'border-[#94a3b8]'}`}
     >
-      {/* Window Title Bar */}
+      {/* Flat Light Desktop Title Bar */}
       <div
         onPointerDown={handleTitlePointerDown}
         onPointerMove={handleTitlePointerMove}
@@ -118,25 +110,25 @@ export function Window({ windowState, icon, children }: WindowProps) {
             toggleMaximizeApp(windowState.id);
           }
         }}
-        className={`flex h-10 shrink-0 items-center justify-between border-b px-3 select-none ${
-          windowState.isMaximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+        className={`flex h-8 shrink-0 items-center justify-between border-b border-slate-200 pl-2.5 select-none ${
+          windowState.isMaximized ? 'cursor-default' : 'cursor-default'
         } ${
           isFocused
-            ? 'border-slate-700/80 bg-slate-800/90'
-            : 'border-slate-800 bg-slate-900/90'
+            ? 'bg-white text-slate-800'
+            : 'bg-[#f1f3f5] text-slate-500'
         }`}
       >
-        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-200">
-          <span className={appAccent[windowState.id]}>{icon}</span>
+        <div className="flex items-center gap-2 text-xs font-normal">
+          <span className="flex items-center">{icon}</span>
           <span>{windowState.title}</span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex h-full items-stretch">
           <button
             type="button"
             onClick={() => minimizeApp(windowState.id)}
             aria-label={`Minimize ${windowState.title}`}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-700/70 hover:text-slate-100 cursor-pointer"
+            className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-slate-200/80 hover:text-slate-950"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
@@ -144,10 +136,10 @@ export function Window({ windowState, icon, children }: WindowProps) {
             type="button"
             onClick={() => toggleMaximizeApp(windowState.id)}
             aria-label={windowState.isMaximized ? 'Restore window' : 'Maximize window'}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-700/70 hover:text-slate-100 cursor-pointer"
+            className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-slate-200/80 hover:text-slate-950"
           >
             {windowState.isMaximized ? (
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="h-3 w-3" />
             ) : (
               <Square className="h-3 w-3" />
             )}
@@ -156,7 +148,7 @@ export function Window({ windowState, icon, children }: WindowProps) {
             type="button"
             onClick={() => closeApp(windowState.id)}
             aria-label={`Close ${windowState.title}`}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-500/80 hover:text-white cursor-pointer"
+            className="flex h-8 w-11 items-center justify-center text-slate-700 transition-colors hover:bg-[#e81123] hover:text-white"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -164,7 +156,7 @@ export function Window({ windowState, icon, children }: WindowProps) {
       </div>
 
       {/* App Content */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-slate-950/60">
+      <div className="flex-1 min-h-0 overflow-hidden bg-white">
         {children}
       </div>
     </div>

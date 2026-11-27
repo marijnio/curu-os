@@ -1,4 +1,4 @@
-import { Bug, FolderOpen, Mail, MessageSquare, Terminal } from 'lucide-react';
+import { Bug, Folder, Mail, MessageSquare } from 'lucide-react';
 import type { AppId } from '../../types/os';
 import { useOsStore } from '../../store/useOsStore';
 import { SystemTray } from './SystemTray';
@@ -6,11 +6,10 @@ import { SystemTray } from './SystemTray';
 const TASKBAR_APPS: Array<{
   id: AppId;
   label: string;
-  accent: string;
 }> = [
-  { id: 'messages', label: 'Messages', accent: 'text-emerald-400' },
-  { id: 'mail', label: 'Mail', accent: 'text-sky-400' },
-  { id: 'explorer', label: 'File Explorer', accent: 'text-amber-400' },
+  { id: 'messages', label: 'Messages' },
+  { id: 'mail', label: 'Mail' },
+  { id: 'explorer', label: 'File Explorer' },
 ];
 
 export function Taskbar() {
@@ -36,16 +35,16 @@ export function Taskbar() {
     director: 0,
   };
 
-  const renderIcon = (id: AppId, cls: string) => {
+  const renderTaskIcon = (id: AppId) => {
     switch (id) {
       case 'messages':
-        return <MessageSquare className={cls} />;
+        return <MessageSquare className="h-4 w-4 fill-[#25b864] text-[#25b864]" />;
       case 'mail':
-        return <Mail className={cls} />;
+        return <Mail className="h-4 w-4 text-[#4ca3dd]" />;
       case 'explorer':
-        return <FolderOpen className={cls} />;
+        return <Folder className="h-4 w-4 fill-[#eab308] text-[#ca8a04]" />;
       case 'director':
-        return <Bug className={cls} />;
+        return <Bug className="h-4 w-4 text-slate-300" />;
     }
   };
 
@@ -61,29 +60,38 @@ export function Taskbar() {
   };
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-40 flex h-12 items-center justify-between border-t border-slate-700/70 bg-slate-950/90 px-2.5 backdrop-blur-xl select-none">
-      {/* Left: Start Button */}
-      <div className="flex items-center gap-2">
+    <footer className="fixed inset-x-0 bottom-0 z-40 flex h-10 items-center justify-between border-t border-[#232730] bg-[#101216] select-none">
+      {/* Left: Start Button + Pinned/Open Apps */}
+      <div className="flex h-full items-center">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             toggleStartMenu();
           }}
-          className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition cursor-pointer ${
+          title="Curu-OS Menu"
+          aria-label="Curu-OS Start Menu"
+          className={`flex h-10 w-12 items-center justify-center transition-colors ${
             startMenuOpen
-              ? 'border-sky-400/60 bg-sky-500/20 text-sky-200'
-              : 'border-slate-700/80 bg-slate-900/90 text-slate-200 hover:border-slate-600 hover:bg-slate-800'
+              ? 'bg-[#272b34] text-[#4ca3dd]'
+              : 'text-white hover:bg-[#22262e] hover:text-[#6cc0f5]'
           }`}
         >
-          <Terminal className="h-4 w-4 text-sky-400" />
-          <span>Curu-OS</span>
+          {/* Distinct Curu-OS geometric mark (not Windows 4-pane flag) */}
+          <svg
+            viewBox="0 0 20 20"
+            className="h-4 w-4 fill-current"
+            aria-hidden="true"
+          >
+            <rect x="2" y="2" width="7" height="7" rx="1" />
+            <rect x="11" y="2" width="7" height="7" rx="1" opacity="0.65" />
+            <rect x="2" y="11" width="7" height="7" rx="1" />
+            <circle cx="14.5" cy="14.5" r="3" opacity="0.9" />
+          </svg>
         </button>
 
-        <div className="h-5 w-px bg-slate-800 mx-0.5" />
-
-        {/* Center-Left: Core & Open App Tabs */}
-        <div className="flex items-center gap-1.5">
+        {/* Pinned & Open App Tabs */}
+        <div className="flex h-full items-center">
           {TASKBAR_APPS.map((app) => {
             const win = windows[app.id];
             const isActive = win.isOpen && !win.isMinimized && focusedApp === app.id;
@@ -94,25 +102,26 @@ export function Taskbar() {
                 key={app.id}
                 type="button"
                 onClick={() => handleTaskButton(app.id)}
-                className={`relative flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition cursor-pointer ${
+                title={app.label}
+                className={`relative flex h-10 items-center gap-2 px-3.5 text-xs transition-colors ${
                   isActive
-                    ? 'border-sky-500/50 bg-slate-800/95 text-slate-100'
+                    ? 'bg-[#272b34] text-white'
                     : win.isOpen
-                      ? 'border-slate-700/70 bg-slate-900/70 text-slate-300 hover:bg-slate-800/70'
-                      : 'border-transparent bg-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                      ? 'bg-[#181b21] text-slate-200 hover:bg-[#22262e]'
+                      : 'text-slate-300 hover:bg-[#1d2028]'
                 }`}
               >
-                {renderIcon(app.id, `h-4 w-4 ${app.accent}`)}
-                <span className="hidden sm:inline">{app.label}</span>
+                {renderTaskIcon(app.id)}
+                <span className="hidden md:inline font-normal">{app.label}</span>
                 {badge > 0 && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d93025] px-1 text-[10px] font-bold text-white">
                     {badge > 9 ? '9+' : badge}
                   </span>
                 )}
                 {win.isOpen && (
                   <span
-                    className={`absolute bottom-0.5 left-1/2 h-0.5 -translate-x-1/2 rounded-full transition-all ${
-                      isActive ? 'w-5 bg-sky-400' : 'w-2.5 bg-slate-500'
+                    className={`absolute bottom-0 left-1/2 h-[2px] -translate-x-1/2 transition-all ${
+                      isActive ? 'w-full bg-[#4ca3dd]' : 'w-4 bg-slate-400'
                     }`}
                   />
                 )}
@@ -124,14 +133,22 @@ export function Taskbar() {
             <button
               type="button"
               onClick={() => handleTaskButton('director')}
-              className={`relative flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition cursor-pointer ${
+              title="Director Inspector"
+              className={`relative flex h-10 items-center gap-2 px-3.5 text-xs transition-colors ${
                 !windows.director.isMinimized && focusedApp === 'director'
-                  ? 'border-violet-500/50 bg-slate-800/95 text-slate-100'
-                  : 'border-slate-700/70 bg-slate-900/70 text-slate-300 hover:bg-slate-800/70'
+                  ? 'bg-[#272b34] text-white'
+                  : 'bg-[#181b21] text-slate-300 hover:bg-[#22262e]'
               }`}
             >
-              <Bug className="h-4 w-4 text-violet-400" />
-              <span className="hidden md:inline">Director</span>
+              {renderTaskIcon('director')}
+              <span className="hidden md:inline font-normal">Director</span>
+              <span
+                className={`absolute bottom-0 left-1/2 h-[2px] -translate-x-1/2 ${
+                  !windows.director.isMinimized && focusedApp === 'director'
+                    ? 'w-full bg-[#4ca3dd]'
+                    : 'w-4 bg-slate-400'
+                }`}
+              />
             </button>
           )}
         </div>

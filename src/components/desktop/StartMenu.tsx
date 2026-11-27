@@ -2,12 +2,11 @@ import { useState } from 'react';
 import {
   Bug,
   Check,
-  FolderOpen,
+  Folder,
+  Layers,
   Mail,
   MessageSquare,
   RotateCcw,
-  Terminal,
-  Layers,
 } from 'lucide-react';
 import { useOsStore } from '../../store/useOsStore';
 
@@ -32,70 +31,61 @@ export function StartMenu() {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="fixed bottom-14 left-3 z-50 w-84 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900/95 shadow-2xl backdrop-blur-xl"
+      className="fixed bottom-10 left-0 z-50 w-76 overflow-hidden rounded-tr-[2px] border-t border-r border-[#323742] bg-[#1b1e24] text-slate-100 shadow-2xl"
     >
-      {/* Brand Header */}
-      <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+      {/* Header */}
+      <div className="border-b border-[#2c313b] bg-[#14171c] px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30">
-              <Terminal className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-sm font-bold tracking-tight text-slate-100">
-                Curu-OS
-              </div>
-              <div className="text-[11px] text-slate-400">
-                {manifest?.subtitle || 'Workplace Narrative Runtime'}
-              </div>
+          <div>
+            <div className="text-sm font-semibold text-white">Curu-OS</div>
+            <div className="text-[11px] text-slate-400">
+              {manifest?.subtitle || 'Workplace Terminal'}
             </div>
           </div>
-          <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+          <span className="rounded-[2px] bg-[#262b35] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
             v0.1
           </span>
         </div>
       </div>
 
-      {/* Core Applications */}
-      <div className="border-b border-slate-800/80 p-2">
-        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      {/* Applications */}
+      <div className="border-b border-[#2c313b] py-1.5">
+        <div className="px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Applications
         </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            onClick={() => openApp('messages')}
-            className="flex flex-col items-center gap-1 rounded-lg p-2 text-xs text-slate-200 transition hover:bg-slate-800 cursor-pointer"
-          >
-            <MessageSquare className="h-4 w-4 text-emerald-400" />
-            <span>Messages</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openApp('mail')}
-            className="flex flex-col items-center gap-1 rounded-lg p-2 text-xs text-slate-200 transition hover:bg-slate-800 cursor-pointer"
-          >
-            <Mail className="h-4 w-4 text-sky-400" />
-            <span>Mail</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openApp('explorer')}
-            className="flex flex-col items-center gap-1 rounded-lg p-2 text-xs text-slate-200 transition hover:bg-slate-800 cursor-pointer"
-          >
-            <FolderOpen className="h-4 w-4 text-amber-400" />
-            <span>Files</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => openApp('messages')}
+          className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a]"
+        >
+          <MessageSquare className="h-4 w-4 text-[#25b864]" />
+          <span>Messages</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openApp('mail')}
+          className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a]"
+        >
+          <Mail className="h-4 w-4 text-[#4ca3dd]" />
+          <span>Mail</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openApp('explorer')}
+          className="flex w-full items-center gap-3 px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a]"
+        >
+          <Folder className="h-4 w-4 fill-[#eab308] text-[#ca8a04]" />
+          <span>File Explorer</span>
+        </button>
       </div>
 
       {/* Scenario Selector */}
-      <div className="border-b border-slate-800/80 p-2">
-        <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      <div className="border-b border-[#2c313b] py-1.5">
+        <div className="flex items-center gap-1.5 px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           <Layers className="h-3 w-3" />
-          Scenario Selector
+          Scenarios
         </div>
-        <div className="max-h-40 space-y-1 overflow-y-auto">
+        <div className="max-h-40 overflow-y-auto">
           {availableScenarios.map((sc) => {
             const active = sc.id === scenarioId;
             return (
@@ -109,10 +99,10 @@ export function StartMenu() {
                     toggleStartMenu(false);
                   }
                 }}
-                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left transition cursor-pointer ${
+                className={`flex w-full items-center justify-between px-3.5 py-2 text-left transition ${
                   active
-                    ? 'bg-sky-500/15 text-sky-200 border border-sky-500/30'
-                    : 'text-slate-300 hover:bg-slate-800/80'
+                    ? 'bg-[#2a3950] text-white'
+                    : 'text-slate-300 hover:bg-[#2a2f3a]'
                 }`}
               >
                 <div className="min-w-0 pr-2">
@@ -123,15 +113,15 @@ export function StartMenu() {
                     </div>
                   )}
                 </div>
-                {active && <Check className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
+                {active && <Check className="h-3.5 w-3.5 shrink-0 text-[#4ca3dd]" />}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Tools & Actions */}
-      <div className="space-y-1 p-2">
+      {/* System Actions */}
+      <div className="py-1.5">
         <button
           type="button"
           onClick={() => {
@@ -142,17 +132,17 @@ export function StartMenu() {
               openApp('director');
             }
           }}
-          className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs text-slate-200 transition hover:bg-slate-800 cursor-pointer"
+          className="flex w-full items-center justify-between px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a]"
         >
-          <span className="flex items-center gap-2">
-            <Bug className="h-4 w-4 text-violet-400" />
+          <span className="flex items-center gap-2.5">
+            <Bug className="h-4 w-4 text-slate-400" />
             Director / Debug Inspector
           </span>
           <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            className={`rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium ${
               directorOpen
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'bg-slate-800 text-slate-400'
+                ? 'bg-[#2a3950] text-[#7cc4f5]'
+                : 'bg-[#262b35] text-slate-400'
             }`}
           >
             {directorOpen ? 'ON' : 'OFF'}
@@ -163,19 +153,19 @@ export function StartMenu() {
           <button
             type="button"
             onClick={() => setConfirmReset(true)}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-rose-300 transition hover:bg-rose-500/15 cursor-pointer"
+            className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-rose-300 hover:bg-[#332227]"
           >
             <RotateCcw className="h-4 w-4" />
-            Reset Scenario Progress
+            Reset Progress
           </button>
         ) : (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-950/40 px-2.5 py-1.5">
-            <span className="text-[11px] text-rose-200">Restart from 09:00?</span>
+          <div className="mx-2 my-1 flex items-center justify-between gap-2 border border-rose-500/40 bg-[#2d1c21] px-2.5 py-1.5">
+            <span className="text-[11px] text-rose-200">Restart scenario?</span>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="rounded px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer"
+                className="rounded-[2px] px-2 py-0.5 text-[11px] text-slate-300 hover:bg-[#3a3f4b]"
               >
                 Cancel
               </button>
@@ -185,7 +175,7 @@ export function StartMenu() {
                   setConfirmReset(false);
                   void resetProgress();
                 }}
-                className="rounded bg-rose-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-rose-500 cursor-pointer"
+                className="rounded-[2px] bg-[#d93025] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[#e53935]"
               >
                 Reset
               </button>

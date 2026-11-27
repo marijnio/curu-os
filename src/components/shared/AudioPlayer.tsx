@@ -63,7 +63,6 @@ export function AudioPlayer({
   const [duration, setDuration] = useState(fallbackDuration);
   const [showTranscript, setShowTranscript] = useState(variant === 'full');
 
-  // Reset when track changes
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
@@ -116,7 +115,6 @@ export function AudioPlayer({
     };
   }, [audioUrl, fallbackDuration]);
 
-  // Keep mute state synced
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.muted = muted;
@@ -167,7 +165,6 @@ export function AudioPlayer({
       await audio.play();
       setIsPlaying(true);
     } catch {
-      // Missing/unplayable file: seamlessly transition to Web Audio cadence fallback
       setUseFallback(true);
       const sim = ensureSim();
       sim.play();
@@ -189,7 +186,7 @@ export function AudioPlayer({
 
   return (
     <div
-      className={`rounded-xl border border-slate-700/70 bg-slate-900/75 ${
+      className={`rounded-lg border border-slate-300/80 bg-[#f4f6f8] ${
         variant === 'full' ? 'p-4' : 'p-2.5 min-w-[260px] max-w-[340px]'
       }`}
     >
@@ -198,7 +195,7 @@ export function AudioPlayer({
           type="button"
           onClick={() => void togglePlay()}
           aria-label={isPlaying ? 'Pause voice note' : 'Play voice note'}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 transition hover:bg-sky-400 active:scale-95 cursor-pointer"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0067c0] text-white transition hover:bg-[#005aa8] active:scale-95 cursor-pointer"
         >
           {isPlaying ? (
             <Pause className="h-4 w-4 fill-current" />
@@ -229,29 +226,33 @@ export function AudioPlayer({
                   key={idx}
                   style={{ height: `${Math.round(height * 100)}%` }}
                   className={`flex-1 rounded-full transition-colors ${
-                    active ? 'bg-sky-400' : 'bg-slate-600/80'
+                    active ? 'bg-[#0067c0]' : 'bg-slate-300'
                   }`}
                 />
               );
             })}
           </div>
 
-          <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600">
             <span className="font-mono">
               {formatSeconds(currentTime)} / {formatSeconds(duration)}
             </span>
             <span className="flex items-center gap-1.5">
               {useFallback && (
-                <span className="inline-flex items-center gap-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-amber-300/90 border border-amber-500/20">
-                  {muted ? <VolumeX className="h-2.5 w-2.5" /> : <Volume2 className="h-2.5 w-2.5" />}
-                  Synth
+                <span className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-600">
+                  {muted ? (
+                    <VolumeX className="h-2.5 w-2.5" />
+                  ) : (
+                    <Volume2 className="h-2.5 w-2.5" />
+                  )}
+                  Simulated
                 </span>
               )}
               {transcript && variant === 'compact' && (
                 <button
                   type="button"
                   onClick={() => setShowTranscript((v) => !v)}
-                  className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[#0067c0] hover:underline cursor-pointer"
                 >
                   <FileText className="h-3 w-3" />
                   {showTranscript ? 'Hide' : 'Transcript'}
@@ -261,9 +262,9 @@ export function AudioPlayer({
                 <button
                   type="button"
                   onClick={onOpenInExplorer}
-                  className="text-slate-400 hover:text-slate-200 underline decoration-slate-600 cursor-pointer"
+                  className="text-slate-600 hover:text-slate-900 underline decoration-slate-400 cursor-pointer"
                 >
-                  Save/Open
+                  Open File
                 </button>
               )}
             </span>
@@ -272,8 +273,8 @@ export function AudioPlayer({
       </div>
 
       {transcript && showTranscript && (
-        <div className="mt-2.5 rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
-          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <div className="mt-2.5 rounded border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700">
+          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Auto-Transcript
           </span>
           {transcript}

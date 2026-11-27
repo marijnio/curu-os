@@ -48,8 +48,8 @@ export function MarkdownViewer({ path }: MarkdownViewerProps) {
 
   if (loading) {
     return (
-      <div className="flex h-40 items-center justify-center gap-2 text-xs text-slate-400">
-        <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
+      <div className="flex h-40 items-center justify-center gap-2 text-xs text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin text-[#0067c0]" />
         Loading document...
       </div>
     );
@@ -57,8 +57,8 @@ export function MarkdownViewer({ path }: MarkdownViewerProps) {
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">
-        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+      <div className="flex items-center gap-2 rounded border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">
+        <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
         {error}
       </div>
     );
