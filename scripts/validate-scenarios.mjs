@@ -334,6 +334,38 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
       }
     }
 
+    let promptVarName = null;
+    if (manifest.playerPrompt !== undefined) {
+      const pp = manifest.playerPrompt;
+      if (typeof pp !== 'object' || pp === null || Array.isArray(pp)) {
+        errors.push(`[${scenarioId}] scenario.json "playerPrompt" must be an object when provided.`);
+      } else {
+        for (const boolField of ['enabled', 'required']) {
+          if (pp[boolField] !== undefined && typeof pp[boolField] !== 'boolean') {
+            errors.push(`[${scenarioId}] scenario.json playerPrompt.${boolField} must be a boolean.`);
+          }
+        }
+        for (const strField of ['variableName', 'label', 'placeholder', 'helperText', 'defaultValue']) {
+          if (pp[strField] !== undefined && typeof pp[strField] !== 'string') {
+            errors.push(`[${scenarioId}] scenario.json playerPrompt.${strField} must be a string.`);
+          }
+        }
+        if (typeof pp.variableName === 'string' && pp.variableName.trim()) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(pp.variableName.trim())) {
+            errors.push(
+              `[${scenarioId}] scenario.json playerPrompt.variableName "${pp.variableName}" must be a valid identifier (/^[A-Za-z_][A-Za-z0-9_]*$/).`
+            );
+          }
+        }
+        if (pp.enabled !== false) {
+          promptVarName =
+            typeof pp.variableName === 'string' && pp.variableName.trim()
+              ? pp.variableName.trim()
+              : 'player_name';
+        }
+      }
+    }
+
     const entrypoints = resolveScenarioEntrypoints(scenarioDir);
     const storyFileRef = typeof manifest.storyFile === 'string' ? manifest.storyFile : 'story.ink';
     if (entrypoints.length === 0) {
@@ -357,6 +389,15 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
     }
 
     const inkFiles = collectInkFiles(scenarioDir);
+    if (promptVarName && Object.keys(inkFiles).length > 0) {
+      const varDeclRe = new RegExp(`^\\s*VAR\\s+${promptVarName}\\b`, 'm');
+      const hasVarDecl = Object.values(inkFiles).some((src) => varDeclRe.test(src));
+      if (!hasVarDecl) {
+        warnings.push(
+          `[${scenarioId}] playerPrompt is enabled for "${promptVarName}", but no \`VAR ${promptVarName} = "..."\` declaration was found in .ink files (it will still work in Markdown {{${promptVarName}}} templates).`
+        );
+      }
+    }
     for (const [relInkPath, inkSource] of Object.entries(inkFiles)) {
       const { contactRefs, assets, tagErrors } = scanInkTags(inkSource);
       for (const err of tagErrors) {

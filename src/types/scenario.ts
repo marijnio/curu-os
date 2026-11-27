@@ -37,6 +37,16 @@ export interface ScenarioTheme {
   wallpaperImage?: string;
 }
 
+export interface PlayerPromptConfig {
+  enabled?: boolean;
+  variableName?: string;
+  label?: string;
+  placeholder?: string;
+  helperText?: string;
+  defaultValue?: string;
+  required?: boolean;
+}
+
 export interface ScenarioManifest {
   id: string;
   title: string;
@@ -46,6 +56,7 @@ export interface ScenarioManifest {
   dayLabel: string;
   storyFile: string;
   theme?: ScenarioTheme;
+  playerPrompt?: PlayerPromptConfig;
   contacts: Contact[];
   files: FileCatalogEntry[];
 }

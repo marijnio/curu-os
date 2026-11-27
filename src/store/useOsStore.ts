@@ -18,6 +18,13 @@ import type {
 } from '../types/os';
 import type { Contact, FolderName, ScenarioManifest } from '../types/scenario';
 import {
+  fetchAuthStatus,
+  submitLogin,
+  submitLogout,
+  type LoginResult,
+} from '../engine/authClient';
+import {
+  AuthRequiredError,
   fetchScenarioIndex,
   loadScenarioBundle,
   type ScenarioSummary,
@@ -30,10 +37,23 @@ import {
   parseClockMinutes,
   parseInkTags,
 } from '../engine/tagParser';
+import {
+  interpolateTemplate,
+  normalizePlayerPrompt,
+  sanitizePlayerInput,
+} from '../engine/templateVars';
 
 const STORAGE_PREFIX = 'curu-os:v2:';
 const ACTIVE_SCENARIO_KEY = 'curu-os:v2:active-scenario';
 const CHECKPOINTS_PREFIX = 'curu-os:v2:checkpoints:';
+
+export type AppPhase = 'booting' | 'login' | 'select_scenario' | 'desktop';
+
+export interface SavedScenarioMeta {
+  clockStr: string;
+  dayLabel: string;
+  playerName?: string;
+}
 
 let storyInstance: Story | null = null;
 let sessionToken = 0;
@@ -86,6 +106,38 @@ export interface PersistedSnapshot {
   activeChoices: ActiveChoice[];
   pendingHooks: EventHook[];
   pausedByContinueHook: boolean;
+  playerVariables?: Record<string, string>;
+}
+
+export function getSavedScenarioMeta(
+  scenarioId: string,
+  variableName = 'player_name'
+): SavedScenarioMeta | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${scenarioId}`);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<PersistedSnapshot>;
+    if (typeof saved.inkStateJson !== 'string') return null;
+    const clockMinutes =
+      typeof saved.clockMinutes === 'number' && Number.isFinite(saved.clockMinutes)
+        ? saved.clockMinutes
+        : 9 * 60;
+    const dayLabel =
+      typeof saved.dayLabel === 'string' && saved.dayLabel.trim()
+        ? saved.dayLabel
+        : 'Day 1';
+    const playerName =
+      saved.playerVariables && typeof saved.playerVariables[variableName] === 'string'
+        ? saved.playerVariables[variableName].trim() || undefined
+        : undefined;
+    return {
+      clockStr: formatClock24(clockMinutes),
+      dayLabel,
+      playerName,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface CheckpointRecord {
@@ -214,7 +266,12 @@ function matchesEmailHookTarget(email: EmailMessage, target: string): boolean {
 }
 
 export interface OsState {
-  // App lifecycle
+  // App lifecycle & auth
+  appPhase: AppPhase;
+  authEnabled: boolean;
+  isAuthenticated: boolean;
+  authError: string | null;
+  pendingScenarioId: string | null;
   isLoading: boolean;
   loadError: string | null;
   availableScenarios: ScenarioSummary[];
@@ -222,6 +279,8 @@ export interface OsState {
   manifest: ScenarioManifest | null;
   compiledFrom: 'ink' | 'json' | null;
   compilerWarnings: string[];
+  playerVariables: Record<string, string>;
+  templateVars: Record<string, string>;
 
   // Desktop / Windows
   windows: Record<AppId, WindowState>;
@@ -270,8 +329,14 @@ export interface OsState {
 
   // Actions
   initApp: () => Promise<void>;
-  loadScenario: (scenarioId: string, opts?: { forceReset?: boolean }) => Promise<void>;
-  resetProgress: () => Promise<void>;
+  login: (password: string) => Promise<LoginResult>;
+  logout: () => Promise<void>;
+  openScenarioSelector: (preselectId?: string) => void;
+  loadScenario: (
+    scenarioId: string,
+    opts?: { forceReset?: boolean; playerVariables?: Record<string, string> }
+  ) => Promise<void>;
+  resetProgress: (opts?: { returnToSetup?: boolean }) => Promise<void>;
 
   // Window actions
   openApp: (appId: AppId) => void;
@@ -437,6 +502,32 @@ export const useOsStore = create<OsState>((set, get) => {
     return created;
   }
 
+  function collectTemplateVars(
+    playerVariables: Record<string, string>
+  ): Record<string, string> {
+    const vars: Record<string, string> = { ...playerVariables };
+    if (!storyInstance) return vars;
+    try {
+      const vs = storyInstance.variablesState as unknown as {
+        _globalVariables?: Map<string, unknown>;
+        $: (name: string) => unknown;
+      };
+      const map = vs._globalVariables;
+      if (!map) return vars;
+      for (const key of map.keys()) {
+        const val = storyInstance.variablesState.$(key);
+        if (typeof val === 'string') {
+          vars[key] = val;
+        } else if (typeof val === 'number' || typeof val === 'boolean') {
+          vars[key] = String(val);
+        }
+      }
+    } catch {
+      // Ignore variable inspection errors gracefully
+    }
+    return vars;
+  }
+
   function buildCurrentSnapshot(): PersistedSnapshot | null {
     const state = get();
     if (!storyInstance || !state.scenarioId) return null;
@@ -457,6 +548,7 @@ export const useOsStore = create<OsState>((set, get) => {
       activeChoices: state.activeChoices,
       pendingHooks: state.pendingHooks,
       pausedByContinueHook,
+      playerVariables: state.playerVariables,
     };
   }
 
@@ -507,8 +599,15 @@ export const useOsStore = create<OsState>((set, get) => {
               updatedAt: formatClock24(saved.clockMinutes),
             },
           ];
+    const playerVariables =
+      saved.playerVariables && typeof saved.playerVariables === 'object'
+        ? saved.playerVariables
+        : {};
+    const templateVars = collectTemplateVars(playerVariables);
 
     set({
+      appPhase: 'desktop',
+      pendingScenarioId: null,
       isLoading: false,
       windows: createDefaultWindows(),
       focusedApp: 'messages',
@@ -535,6 +634,8 @@ export const useOsStore = create<OsState>((set, get) => {
       activeEmailDraftId: saved.activeEmailDraftId,
       activeChoices: saved.activeChoices,
       pendingHooks: saved.pendingHooks,
+      playerVariables,
+      templateVars,
       debugLogs: [
         {
           id: makeId('log'),
@@ -816,8 +917,15 @@ export const useOsStore = create<OsState>((set, get) => {
       steps += 1;
       const rawLine = storyInstance.Continue() ?? '';
       const rawTags = storyInstance.currentTags ?? [];
-      const line = rawLine.trim();
+      const vars = collectTemplateVars(get().playerVariables);
+      const line = interpolateTemplate(rawLine.trim(), vars);
       const parsed = parseInkTags(rawTags);
+      const interpolatedSubject = parsed.subject
+        ? interpolateTemplate(parsed.subject, vars)
+        : undefined;
+      const interpolatedDayLabel = parsed.setDayLabel
+        ? interpolateTemplate(parsed.setDayLabel, vars)
+        : undefined;
 
       if (parsed.unknownTags.length > 0) {
         appendDebugLog('tag', `Unrecognized tags: ${parsed.unknownTags.join(', ')}`);
@@ -838,10 +946,10 @@ export const useOsStore = create<OsState>((set, get) => {
           minutes: parsed.advanceMinutes,
         });
       }
-      if (parsed.setDayLabel) {
+      if (interpolatedDayLabel) {
         dispatchQueue.push({
           kind: 'set_day',
-          dayLabel: parsed.setDayLabel,
+          dayLabel: interpolatedDayLabel,
         });
       }
       for (const contactId of parsed.contactUnlocks) {
@@ -911,7 +1019,7 @@ export const useOsStore = create<OsState>((set, get) => {
               voiceNote: {
                 path: vn.path,
                 duration: vn.duration,
-                transcript: vn.transcript,
+                transcript: vn.transcript ? interpolateTemplate(vn.transcript, vars) : vn.transcript,
               },
             },
           });
@@ -967,7 +1075,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
         if (
           line ||
-          parsed.subject ||
+          interpolatedSubject ||
           parsed.attachments.length > 0 ||
           parsed.flagEmail
         ) {
@@ -975,7 +1083,7 @@ export const useOsStore = create<OsState>((set, get) => {
             kind: 'email_line',
             senderId: currentSenderId,
             subject:
-              parsed.subject ??
+              interpolatedSubject ??
               (emailSenderChanged ? '(Follow-up)' : undefined),
             line,
             attachments: parsed.attachments,
@@ -1007,9 +1115,11 @@ export const useOsStore = create<OsState>((set, get) => {
 
     pausedByContinueHook = shouldPauseForContinueHook;
 
+    const latestVars = collectTemplateVars(get().playerVariables);
     set({
       activeChannel: currentChannel,
       activeSenderId: currentSenderId,
+      templateVars: latestVars,
     });
 
     if (!shouldPauseForContinueHook) {
@@ -1041,7 +1151,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
         return {
           index: c.index,
-          text: c.text.trim(),
+          text: interpolateTemplate(c.text.trim(), latestVars),
           channel,
           targetId,
           silent: choiceTags.silent,
@@ -1076,6 +1186,11 @@ export const useOsStore = create<OsState>((set, get) => {
   }
 
   return {
+    appPhase: 'booting',
+    authEnabled: false,
+    isAuthenticated: false,
+    authError: null,
+    pendingScenarioId: null,
     isLoading: true,
     loadError: null,
     availableScenarios: [],
@@ -1083,6 +1198,8 @@ export const useOsStore = create<OsState>((set, get) => {
     manifest: null,
     compiledFrom: null,
     compilerWarnings: [],
+    playerVariables: {},
+    templateVars: {},
 
     windows: createDefaultWindows(),
     focusedApp: 'messages',
@@ -1126,22 +1243,140 @@ export const useOsStore = create<OsState>((set, get) => {
       if (initStarted) return;
       initStarted = true;
 
+      set({ appPhase: 'booting', isLoading: true, loadError: null, authError: null });
+
       try {
+        const auth = await fetchAuthStatus();
+        if (auth.authEnabled && !auth.authenticated) {
+          set({
+            authEnabled: true,
+            isAuthenticated: false,
+            appPhase: 'login',
+            isLoading: false,
+            loadError: null,
+          });
+          return;
+        }
+
+        set({
+          authEnabled: auth.authEnabled,
+          isAuthenticated: true,
+        });
+
         const scenarios = await fetchScenarioIndex();
         const savedId = localStorage.getItem(ACTIVE_SCENARIO_KEY);
-        const initialId =
-          savedId && scenarios.some((s) => s.id === savedId)
-            ? savedId
-            : scenarios[0]?.id ?? 'demo';
-
         set({ availableScenarios: scenarios });
-        await get().loadScenario(initialId);
+
+        if (savedId && scenarios.some((s) => s.id === savedId)) {
+          await get().loadScenario(savedId);
+        } else {
+          set({
+            appPhase: 'select_scenario',
+            pendingScenarioId: scenarios[0]?.id ?? null,
+            isLoading: false,
+          });
+        }
       } catch (err) {
+        if (err instanceof AuthRequiredError) {
+          localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+          set({
+            authEnabled: true,
+            isAuthenticated: false,
+            appPhase: 'login',
+            isLoading: false,
+            loadError: null,
+          });
+          return;
+        }
         set({
+          appPhase: 'select_scenario',
           isLoading: false,
           loadError: err instanceof Error ? err.message : String(err),
         });
+        initStarted = false;
       }
+    },
+
+    login: async (password) => {
+      set({ authError: null });
+      const result = await submitLogin(password);
+      if (!result.ok) {
+        set({ authError: result.error ?? 'Invalid access password.' });
+        return result;
+      }
+
+      set({
+        isAuthenticated: true,
+        authError: null,
+        isLoading: true,
+        loadError: null,
+      });
+
+      try {
+        const scenarios = await fetchScenarioIndex();
+        set({
+          availableScenarios: scenarios,
+          appPhase: 'select_scenario',
+          pendingScenarioId: scenarios[0]?.id ?? null,
+          isLoading: false,
+        });
+      } catch (err) {
+        if (err instanceof AuthRequiredError) {
+          set({
+            isAuthenticated: false,
+            appPhase: 'login',
+            authError: 'Session expired. Please sign in again.',
+            isLoading: false,
+          });
+          return { ok: false, error: 'Session expired. Please sign in again.' };
+        }
+        set({
+          appPhase: 'select_scenario',
+          isLoading: false,
+          loadError: err instanceof Error ? err.message : String(err),
+        });
+        initStarted = false;
+      }
+
+      return { ok: true };
+    },
+
+    logout: async () => {
+      await submitLogout();
+      localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+      sessionToken += 1;
+      dispatchQueue.length = 0;
+      queueRunning = false;
+      pausedByContinueHook = false;
+      storyInstance = null;
+
+      set({
+        isAuthenticated: false,
+        appPhase: 'login',
+        authError: null,
+        isLoading: false,
+        startMenuOpen: false,
+        notificationsOpen: false,
+        typingContactId: null,
+        toasts: [],
+      });
+    },
+
+    openScenarioSelector: (preselectId) => {
+      localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+      sessionToken += 1;
+      dispatchQueue.length = 0;
+      queueRunning = false;
+
+      set((state) => ({
+        appPhase: 'select_scenario',
+        pendingScenarioId:
+          preselectId ?? state.scenarioId ?? state.availableScenarios[0]?.id ?? null,
+        startMenuOpen: false,
+        notificationsOpen: false,
+        typingContactId: null,
+        toasts: [],
+      }));
     },
 
     loadScenario: async (scenarioId, opts) => {
@@ -1226,7 +1461,51 @@ export const useOsStore = create<OsState>((set, get) => {
           }
         }
 
+        // Resolve pre-start player variables and inject declared globals into Ink
+        const resolvedVars: Record<string, string> = {};
+        if (opts?.playerVariables) {
+          for (const [k, v] of Object.entries(opts.playerVariables)) {
+            const cleaned = sanitizePlayerInput(v);
+            if (cleaned) {
+              resolvedVars[k] = cleaned;
+            }
+          }
+        }
+        const prompt = normalizePlayerPrompt(manifest.playerPrompt);
+        if (prompt && !resolvedVars[prompt.variableName] && prompt.defaultValue) {
+          const cleanedDefault = sanitizePlayerInput(prompt.defaultValue);
+          if (cleanedDefault) {
+            resolvedVars[prompt.variableName] = cleanedDefault;
+          }
+        }
+
+        const vs = storyInstance.variablesState as unknown as {
+          _globalVariables?: Map<string, unknown>;
+          $: (name: string, val?: unknown) => unknown;
+        };
+        const injectedLogs: DebugLogEntry[] = [];
+        for (const [key, val] of Object.entries(resolvedVars)) {
+          if (vs._globalVariables?.has(key)) {
+            vs.$(key, val);
+          } else {
+            injectedLogs.push({
+              id: makeId('log'),
+              time: startTimeStr,
+              type: 'tag',
+              summary: `Pre-start variable "${key}" is not declared as VAR in story.ink (available for Markdown {{${key}}} only).`,
+            });
+          }
+        }
+
+        const initialTemplateVars = collectTemplateVars(resolvedVars);
+        const initialDayLabel = interpolateTemplate(
+          manifest.dayLabel || 'Day 1',
+          initialTemplateVars
+        );
+
         set({
+          appPhase: 'desktop',
+          pendingScenarioId: null,
           isLoading: false,
           windows: createDefaultWindows(),
           focusedApp: 'messages',
@@ -1234,7 +1513,7 @@ export const useOsStore = create<OsState>((set, get) => {
           toasts: [],
           notifications: [],
           clockMinutes: startMinutes,
-          dayLabel: manifest.dayLabel || 'Day 1',
+          dayLabel: initialDayLabel,
           contacts: manifest.contacts,
           unlockedContactIds: initialUnlockedContacts,
           activeContactId: defaultContact,
@@ -1252,6 +1531,8 @@ export const useOsStore = create<OsState>((set, get) => {
           activeEmailDraftId: null,
           activeChoices: [],
           pendingHooks: [],
+          playerVariables: resolvedVars,
+          templateVars: initialTemplateVars,
           debugLogs: [
             {
               id: makeId('log'),
@@ -1259,12 +1540,24 @@ export const useOsStore = create<OsState>((set, get) => {
               type: 'ink_line',
               summary: `Loaded "${manifest.title}" (source: ${compiledFrom})`,
             },
+            ...injectedLogs,
           ],
         });
 
         localStorage.setItem(ACTIVE_SCENARIO_KEY, resolvedId);
         drainStory();
       } catch (err) {
+        if (err instanceof AuthRequiredError) {
+          localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+          set({
+            authEnabled: true,
+            isAuthenticated: false,
+            appPhase: 'login',
+            authError: 'Session expired. Please sign in again.',
+            isLoading: false,
+          });
+          return;
+        }
         set({
           isLoading: false,
           loadError: err instanceof Error ? err.message : String(err),
@@ -1272,9 +1565,18 @@ export const useOsStore = create<OsState>((set, get) => {
       }
     },
 
-    resetProgress: async () => {
-      const id = get().scenarioId || 'demo';
-      await get().loadScenario(id, { forceReset: true });
+    resetProgress: async (opts) => {
+      const state = get();
+      const id = state.scenarioId || 'demo';
+      if (opts?.returnToSetup && normalizePlayerPrompt(state.manifest?.playerPrompt)) {
+        localStorage.removeItem(`${STORAGE_PREFIX}${id}`);
+        get().openScenarioSelector(id);
+        return;
+      }
+      await get().loadScenario(id, {
+        forceReset: true,
+        playerVariables: state.playerVariables,
+      });
     },
 
     openApp: (appId) => {
@@ -1735,6 +2037,9 @@ export const useOsStore = create<OsState>((set, get) => {
 
       try {
         storyInstance.variablesState.$(name, parsed);
+        set((state) => ({
+          templateVars: collectTemplateVars(state.playerVariables),
+        }));
         appendDebugLog('director', `Set variable ${name} = ${JSON.stringify(parsed)}`);
         persistSnapshot();
       } catch (err) {

@@ -6,7 +6,7 @@
 
 - **Frontend:** Vite, React 19, TypeScript, Tailwind CSS v4
 - **State & Narrative:** Zustand, `inkjs` (with live `.ink` compilation & `.json` fallback), `react-markdown`, Lucide React
-- **Deployment:** Multi-stage Docker (`node:20-alpine` → `nginx:alpine`) published as a multi-arch container image (`linux/amd64`, `linux/arm64`)
+- **Deployment:** Multi-stage Docker (`node:20-alpine` build → `node:20-alpine` static + auth server) published as a multi-arch container image (`linux/amd64`, `linux/arm64`)
 
 ---
 
@@ -15,6 +15,12 @@
 ```bash
 npm install
 npm run dev
+```
+
+To test password protection locally during development:
+
+```bash
+CURU_PASSWORD=change-me npm run dev
 ```
 
 - Edit scenario files under `public/scenarios/<id>/` (e.g. `story.ink`, `scenario.json`, `docs/*.md`).
@@ -119,12 +125,13 @@ Curu-OS is packaged so you can edit `.ink` scripts, Markdown documents, images, 
    ```bash
    cp -r public/scenarios ./scenarios
    ```
-2. Build and start the container using the included **`docker-compose.yml`**:
+2. *(Optional)* Set `CURU_PASSWORD` in `docker-compose.yml` to lock access behind the Curu-OS login screen (unauthenticated requests to `/scenarios/*` are rejected server-side with `401`). You can also optionally configure `CURU_SESSION_SECRET` (recommended if running multiple replicas or persisting logins across container restarts) and `CURU_SESSION_TTL_HOURS` (default `24`).
+3. Build and start the container using the included **`docker-compose.yml`**:
    ```bash
    docker compose up -d
    ```
-3. Open `http://<host>:8080`.
-4. Any edits you make inside `./scenarios/` (including `story.ink`, `docs/*.md`, or adding new scenario folders to `scenarios/index.json`) take effect on browser refresh because Curu-OS compiles `story.ink` in-browser and Nginx serves `/scenarios/` with `no-cache`.
+4. Open `http://<host>:8080`.
+5. Any edits you make inside `./scenarios/` (including `story.ink`, `docs/*.md`, or adding new scenario folders to `scenarios/index.json`) take effect on browser refresh because Curu-OS compiles `story.ink` in-browser and the server serves `/scenarios/` with `no-cache`.
 
 ---
 

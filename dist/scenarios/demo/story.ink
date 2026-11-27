@@ -1,3 +1,4 @@
+VAR player_name = "Analyst"
 VAR posture = "undecided"
 VAR listened_to_intro = false
 
@@ -6,7 +7,7 @@ VAR listened_to_intro = false
 === intro ===
 # CHANNEL: chat
 # SENDER: system_guide
-Good morning. Terminal 04B just finished syncing your desk workspace.
+Good morning, {player_name}. Terminal 04B just finished syncing your desk workspace.
 I left a quick voice briefing below before Elena pings you for the 9:30 standup.
 # VOICE_NOTE: media/welcome_briefing.mp3 \| duration: 0:18 \| transcript: Morning, welcome to Meridian Archive. Before Elena pulls you into the 9:30 standup, check your Messages for the Day 1 briefing file and verify anything marked overnight. Talk in a sec.
 Take a listen whenever you're ready, or let me know if everything looks good on your screen.
@@ -39,7 +40,7 @@ Elena just dropped a message in your Mail inbox with the raw door extract attach
 # SUBJECT: Quick check-in before the 9:30 sync
 # ATTACHMENT: docs/access_log_extract.md
 # FLAG_EMAIL
-Morning,
+Morning {player_name},
 Welcome to Intake & Audit. I know it's barely past nine, but the overnight controller flagged a brief entry in Archive Vault 4 around 02:14 AM with no maintenance ticket attached.
 I've attached the raw access extract. Take a look when you have a minute and let me know how you want to log this before the 9:30 floor sync.
 — Elena

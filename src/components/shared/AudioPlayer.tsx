@@ -6,6 +6,7 @@ import {
   SimulatedVoicePlayback,
 } from '../../engine/audioFallback';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
+import { interpolateTemplate } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 
 interface AudioPlayerProps {
@@ -41,6 +42,7 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
   const scenarioId = useOsStore((s) => s.scenarioId);
   const muted = useOsStore((s) => s.muted);
+  const templateVars = useOsStore((s) => s.templateVars);
 
   const audioUrl = useMemo(
     () => resolveScenarioAssetUrl(scenarioId, path),
@@ -280,7 +282,7 @@ export function AudioPlayer({
           <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Auto-Transcript
           </span>
-          {transcript}
+          {interpolateTemplate(transcript, templateVars)}
         </div>
       )}
     </div>

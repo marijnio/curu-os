@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
+import { interpolateTemplate } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 
 const REMARK_PLUGINS = [remarkGfm];
@@ -21,6 +22,7 @@ interface MarkdownViewerProps {
 
 export function MarkdownViewer({ path }: MarkdownViewerProps) {
   const scenarioId = useOsStore((s) => s.scenarioId);
+  const templateVars = useOsStore((s) => s.templateVars);
   const url = resolveScenarioAssetUrl(scenarioId, path);
 
   const [content, setContent] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function MarkdownViewer({ path }: MarkdownViewerProps) {
         remarkPlugins={REMARK_PLUGINS}
         components={MARKDOWN_COMPONENTS}
       >
-        {content ?? ''}
+        {interpolateTemplate(content ?? '', templateVars)}
       </ReactMarkdown>
     </div>
   );

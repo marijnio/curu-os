@@ -5,6 +5,7 @@ import {
   compileInkFile,
   resolveScenarioEntrypoints,
 } from './compile-ink.mjs';
+import { createAuthHandler } from '../server/auth.mjs';
 
 const MIME_TYPES = {
   '.json': 'application/json; charset=utf-8',
@@ -63,6 +64,11 @@ export function curuScenariosPlugin({ scenariosDir, isExternal = false }) {
       });
     },
     configureServer(server) {
+      const auth = createAuthHandler(process.env);
+      server.middlewares.use((req, res, next) => {
+        void auth.handleAuthMiddleware(req, res, next);
+      });
+
       try {
         const compiled = compileAllScenarios(resolvedScenariosDir);
         logCompileResults(compiled, {
@@ -183,6 +189,12 @@ export function curuScenariosPlugin({ scenariosDir, isExternal = false }) {
       server.watcher.on('add', handleScenarioChange);
       server.watcher.on('change', handleScenarioChange);
       server.watcher.on('unlink', handleScenarioChange);
+    },
+    configurePreviewServer(server) {
+      const auth = createAuthHandler(process.env);
+      server.middlewares.use((req, res, next) => {
+        void auth.handleAuthMiddleware(req, res, next);
+      });
     },
     closeBundle() {
       if (!isExternal || !fs.existsSync(resolvedScenariosDir)) {

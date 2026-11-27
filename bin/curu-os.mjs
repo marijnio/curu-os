@@ -364,6 +364,11 @@ function runInit(args, flags) {
     container_name: ${projectName || 'curu-os-scenario'}
     ports:
       - "8080:80"
+    # Optional: set CURU_PASSWORD to require login before accessing scenarios
+    # environment:
+    #   - CURU_PASSWORD=change-me
+    #   - CURU_SESSION_SECRET=replace-with-random-hex
+    #   - CURU_SESSION_TTL_HOURS=24
     volumes:
       - ./scenarios:/usr/share/nginx/html/scenarios:ro
     restart: unless-stopped

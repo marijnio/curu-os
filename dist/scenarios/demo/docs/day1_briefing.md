@@ -1,6 +1,7 @@
 # Day 1 Shift Briefing — Meridian Archive
 
 **Station:** Terminal 04B · Intake & Audit Desk  
+**Assigned Analyst:** {{player_name}}  
 **Supervisor on Duty:** Elena Vance (Operations Lead)  
 **Clearance:** Tier 2 Provisional
 

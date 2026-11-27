@@ -42,6 +42,14 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
   "startTime": "09:00",
   "dayLabel": "Monday · Day 1",
   "storyFile": "story.ink",
+  "playerPrompt": {
+    "enabled": true,
+    "variableName": "player_name",
+    "label": "Analyst Name",
+    "placeholder": "e.g. Alex Mercer",
+    "helperText": "Colleagues and shift briefings will address you by this name.",
+    "required": true
+  },
   "theme": {
     "osName": "Curu-OS",
     "osVersion": "v0.1",
@@ -76,6 +84,12 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
 
 ### Field Notes
 - `startTime`: 24-hour `"HH:MM"` string (e.g. `"09:00"`).
+- `playerPrompt` (optional): Prompts the player for a pre-start variable (typically their name) before launching a fresh scenario:
+  - `enabled`: Boolean (defaults to `true` when `playerPrompt` is present).
+  - `variableName`: Ink & template variable identifier (defaults to `"player_name"`). Declare `VAR player_name = "Default"` in `story.ink` to use `{player_name}` in dialogue, choices, and `# TAG` directives.
+  - `label`, `placeholder`, `helperText`, `defaultValue`: Form UI copy.
+  - `required`: Boolean (defaults to `true`).
+  - **Markdown & Template Interpolation:** Use `{{player_name}}` (or `{{any_ink_global}}`) inside `docs/*.md`, voice note transcripts, and manifest labels (`dayLabel`).
 - `theme` (optional): Customize OS branding and desktop background without writing React code:
   - `osName`: Start Menu & taskbar branding (defaults to `"Curu-OS"`).
   - `osVersion`: Start Menu version badge (defaults to `"v0.1"`).

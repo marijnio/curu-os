@@ -6,6 +6,11 @@ services:
     container_name: curu-os
     ports:
       - "8080:80"
+    # Optional: set CURU_PASSWORD to require login before accessing scenarios
+    # environment:
+    #   - CURU_PASSWORD=change-me
+    #   - CURU_SESSION_SECRET=replace-with-random-hex
+    #   - CURU_SESSION_TTL_HOURS=24
     volumes:
       - ./scenarios:/usr/share/nginx/html/scenarios
     restart: unless-stopped

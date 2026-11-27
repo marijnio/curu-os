@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { normalizePlayerPrompt } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 import { AttachmentCard } from '../shared/AttachmentCard';
 
@@ -17,6 +18,8 @@ export function MailApp() {
   const activeEmailId = useOsStore((s) => s.activeEmailId);
   const contacts = useOsStore((s) => s.contacts);
   const activeChoices = useOsStore((s) => s.activeChoices);
+  const manifest = useOsStore((s) => s.manifest);
+  const templateVars = useOsStore((s) => s.templateVars);
 
   const selectEmail = useOsStore((s) => s.selectEmail);
   const toggleEmailFlag = useOsStore((s) => s.toggleEmailFlag);
@@ -59,6 +62,9 @@ export function MailApp() {
     : [];
 
   const unreadCount = emails.filter((e) => !e.read).length;
+  const promptVarName =
+    normalizePlayerPrompt(manifest?.playerPrompt)?.variableName ?? 'player_name';
+  const playerName = templateVars[promptVarName];
 
   return (
     <div className="flex h-full w-full bg-white text-slate-900">
@@ -251,7 +257,7 @@ export function MailApp() {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          To: You · {sender?.role ?? 'Staff'}
+                          To: {playerName || 'You'} · {sender?.role ?? 'Staff'}
                         </div>
                       </div>
                     </div>

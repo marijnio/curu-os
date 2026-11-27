@@ -1,12 +1,26 @@
 import { Compiler, CompilerOptions, JsonFileHandler, Story } from 'inkjs/full';
-import type { ScenarioIndexEntry, ScenarioManifest } from '../types/scenario';
+import type {
+  PlayerPromptConfig,
+  ScenarioIndexEntry,
+  ScenarioManifest,
+  ScenarioTheme,
+} from '../types/scenario';
 import { normalizeScenarioPath } from './tagParser';
+
+export class AuthRequiredError extends Error {
+  constructor(message = 'Authentication required') {
+    super(message);
+    this.name = 'AuthRequiredError';
+  }
+}
 
 export interface ScenarioSummary {
   id: string;
   title: string;
   subtitle: string;
   description: string;
+  playerPrompt?: PlayerPromptConfig;
+  theme?: ScenarioTheme;
 }
 
 export interface LoadedScenarioBundle {
@@ -23,6 +37,9 @@ export function resolveScenarioAssetUrl(scenarioId: string, relativePath: string
 
 export async function fetchScenarioIndex(): Promise<ScenarioSummary[]> {
   const indexRes = await fetch('/scenarios/index.json', { cache: 'no-store' });
+  if (indexRes.status === 401) {
+    throw new AuthRequiredError();
+  }
   if (!indexRes.ok) {
     throw new Error(`Failed to fetch scenarios index (${indexRes.status})`);
   }
@@ -35,6 +52,9 @@ export async function fetchScenarioIndex(): Promise<ScenarioSummary[]> {
           `/scenarios/${encodeURIComponent(entry.id)}/scenario.json`,
           { cache: 'no-store' }
         );
+        if (manifestRes.status === 401) {
+          throw new AuthRequiredError();
+        }
         if (!manifestRes.ok) {
           return {
             id: entry.id,
@@ -49,8 +69,13 @@ export async function fetchScenarioIndex(): Promise<ScenarioSummary[]> {
           title: manifest.title || entry.title || entry.id,
           subtitle: manifest.subtitle || '',
           description: manifest.description || '',
+          playerPrompt: manifest.playerPrompt,
+          theme: manifest.theme,
         };
-      } catch {
+      } catch (err) {
+        if (err instanceof AuthRequiredError) {
+          throw err;
+        }
         return {
           id: entry.id,
           title: entry.title ?? entry.id,
@@ -107,6 +132,9 @@ async function fetchInkTree(
   const entryRes = await fetch(resolveScenarioAssetUrl(scenarioId, entryKey), {
     cache: 'no-store',
   });
+  if (entryRes.status === 401) {
+    throw new AuthRequiredError();
+  }
   if (!entryRes.ok) {
     return null;
   }
@@ -123,6 +151,9 @@ async function fetchInkTree(
       const res = await fetch(resolveScenarioAssetUrl(scenarioId, fileKey), {
         cache: 'no-store',
       });
+      if (res.status === 401) {
+        throw new AuthRequiredError();
+      }
       if (!res.ok) {
         throw new Error(
           `Failed to load included Ink file "${fileKey}" (${res.status}) for scenario "${scenarioId}"`
@@ -195,6 +226,9 @@ function compileInkSourceInBrowser(
 export async function loadScenarioBundle(scenarioId: string): Promise<LoadedScenarioBundle> {
   const manifestUrl = `/scenarios/${encodeURIComponent(scenarioId)}/scenario.json`;
   const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
+  if (manifestRes.status === 401) {
+    throw new AuthRequiredError();
+  }
   if (!manifestRes.ok) {
     throw new Error(`Scenario "${scenarioId}" manifest not found (${manifestRes.status})`);
   }
@@ -223,6 +257,9 @@ export async function loadScenarioBundle(scenarioId: string): Promise<LoadedScen
   const jsonRelative = storyFile.replace(/\.ink$/i, '.json');
   const jsonUrl = resolveScenarioAssetUrl(scenarioId, jsonRelative);
   const jsonRes = await fetch(jsonUrl, { cache: 'no-store' });
+  if (jsonRes.status === 401) {
+    throw new AuthRequiredError();
+  }
   if (!jsonRes.ok) {
     throw new Error(
       `Neither ${storyFile} nor ${jsonRelative} could be loaded for scenario "${scenarioId}"`
