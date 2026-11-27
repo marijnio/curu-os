@@ -9,7 +9,7 @@ VAR listened_to_intro = false
 # SENDER: system_guide
 Good morning, {player_name}. Terminal 04B just finished syncing your desk workspace.
 I left a quick voice briefing below before Elena pings you for the 9:30 standup.
-# VOICE_NOTE: media/welcome_briefing.mp3 \| duration: 0:11 \| transcript: Morning, welcome to Meridian Archive. Before Elena pulls you into the 9:30 standup, check your Messages for the Day 1 briefing file and verify anything marked overnight. Talk in a sec.
+c# VOICE_NOTE: media/welcome_briefing.mp3 \| duration: 0:11 \| transcript: Morning, welcome to Meridian Archive. Before Elena pulls you into the 9:30 standup, check your Messages for the Day 1 briefing file and verify anything marked overnight. Talk in a sec.
 Take a listen whenever you're ready, or let me know if everything looks good on your screen.
 
 + [Just finished listening — all set.]

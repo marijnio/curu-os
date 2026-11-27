@@ -23,7 +23,7 @@ import type {
   ScenarioLocale,
   ScenarioManifest,
 } from '../types/scenario';
-import { getTranslations } from '../engine/i18n';
+import { getTranslations, resolveLocale } from '../engine/i18n';
 import {
   fetchAuthStatus,
   submitLogin,
@@ -54,12 +54,19 @@ const STORAGE_PREFIX = 'curu-os:v2:';
 const ACTIVE_SCENARIO_KEY = 'curu-os:v2:active-scenario';
 const CHECKPOINTS_PREFIX = 'curu-os:v2:checkpoints:';
 
-export type AppPhase = 'booting' | 'login' | 'select_scenario' | 'desktop';
+export type AppPhase =
+  | 'booting'
+  | 'login'
+  | 'start'
+  | 'select_scenario'
+  | 'scenario_setup'
+  | 'desktop';
 
 export interface SavedScenarioMeta {
   clockStr: string;
   dayLabel: string;
   playerName?: string;
+  savedAt?: string;
 }
 
 let storyInstance: Story | null = null;
@@ -185,6 +192,7 @@ export interface PersistedSnapshot {
   pausedByContinueHook: boolean;
   playerVariables?: Record<string, string>;
   sessionStartedAt?: string | null;
+  savedAt?: string;
   debugLogs?: DebugLogEntry[];
 }
 
@@ -209,14 +217,61 @@ export function getSavedScenarioMeta(
       saved.playerVariables && typeof saved.playerVariables[variableName] === 'string'
         ? saved.playerVariables[variableName].trim() || undefined
         : undefined;
+    const savedAt =
+      typeof saved.savedAt === 'string' && saved.savedAt.trim()
+        ? saved.savedAt
+        : undefined;
     return {
       clockStr: formatClock24(clockMinutes),
       dayLabel,
       playerName,
+      savedAt,
     };
   } catch {
     return null;
   }
+}
+
+export function getResumableScenario(
+  availableScenarios: ScenarioSummary[]
+): { scenario: ScenarioSummary; savedMeta: SavedScenarioMeta } | null {
+  if (availableScenarios.length === 0) return null;
+
+  const readMeta = (sc: ScenarioSummary): SavedScenarioMeta | null => {
+    const varName =
+      normalizePlayerPrompt(sc.playerPrompt, resolveLocale(sc.locale))
+        ?.variableName ?? 'player_name';
+    return getSavedScenarioMeta(sc.id, varName);
+  };
+
+  try {
+    const activeId = localStorage.getItem(ACTIVE_SCENARIO_KEY);
+    if (activeId) {
+      const activeScenario = availableScenarios.find((sc) => sc.id === activeId);
+      if (activeScenario) {
+        const activeMeta = readMeta(activeScenario);
+        if (activeMeta) {
+          return { scenario: activeScenario, savedMeta: activeMeta };
+        }
+      }
+    }
+  } catch {
+    // Ignore storage access errors gracefully
+  }
+
+  let best: { scenario: ScenarioSummary; savedMeta: SavedScenarioMeta; ts: number } | null =
+    null;
+  for (const sc of availableScenarios) {
+    const meta = readMeta(sc);
+    if (!meta) continue;
+    const parsedTs = meta.savedAt ? Date.parse(meta.savedAt) : Number.NaN;
+    const ts = Number.isFinite(parsedTs) ? parsedTs : 0;
+    if (!best || ts > best.ts) {
+      best = { scenario: sc, savedMeta: meta, ts };
+    }
+  }
+
+  return best ? { scenario: best.scenario, savedMeta: best.savedMeta } : null;
 }
 
 export interface CheckpointRecord {
@@ -487,7 +542,9 @@ export interface OsState {
   initApp: () => Promise<void>;
   login: (password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
+  openStartScreen: () => void;
   openScenarioSelector: (preselectId?: string) => void;
+  beginScenario: (scenarioId: string) => void;
   loadScenario: (
     scenarioId: string,
     opts?: { forceReset?: boolean; playerVariables?: Record<string, string> }
@@ -841,6 +898,7 @@ export const useOsStore = create<OsState>((set, get) => {
       pausedByContinueHook,
       playerVariables: state.playerVariables,
       sessionStartedAt: state.sessionStartedAt,
+      savedAt: new Date().toISOString(),
       debugLogs: state.debugLogs,
     };
   }
@@ -1753,18 +1811,12 @@ export const useOsStore = create<OsState>((set, get) => {
         });
 
         const scenarios = await fetchScenarioIndex();
-        const savedId = localStorage.getItem(ACTIVE_SCENARIO_KEY);
-        set({ availableScenarios: scenarios });
-
-        if (savedId && scenarios.some((s) => s.id === savedId)) {
-          await get().loadScenario(savedId);
-        } else {
-          set({
-            appPhase: 'select_scenario',
-            pendingScenarioId: scenarios[0]?.id ?? null,
-            isLoading: false,
-          });
-        }
+        set({
+          availableScenarios: scenarios,
+          appPhase: 'start',
+          pendingScenarioId: scenarios[0]?.id ?? null,
+          isLoading: false,
+        });
       } catch (err) {
         if (err instanceof AuthRequiredError) {
           localStorage.removeItem(ACTIVE_SCENARIO_KEY);
@@ -1778,7 +1830,7 @@ export const useOsStore = create<OsState>((set, get) => {
           return;
         }
         set({
-          appPhase: 'select_scenario',
+          appPhase: 'start',
           isLoading: false,
           loadError: err instanceof Error ? err.message : String(err),
         });
@@ -1805,7 +1857,7 @@ export const useOsStore = create<OsState>((set, get) => {
         const scenarios = await fetchScenarioIndex();
         set({
           availableScenarios: scenarios,
-          appPhase: 'select_scenario',
+          appPhase: 'start',
           pendingScenarioId: scenarios[0]?.id ?? null,
           isLoading: false,
         });
@@ -1820,7 +1872,7 @@ export const useOsStore = create<OsState>((set, get) => {
           return { ok: false, error: 'Session expired. Please sign in again.' };
         }
         set({
-          appPhase: 'select_scenario',
+          appPhase: 'start',
           isLoading: false,
           loadError: err instanceof Error ? err.message : String(err),
         });
@@ -1852,13 +1904,29 @@ export const useOsStore = create<OsState>((set, get) => {
       });
     },
 
+    openStartScreen: () => {
+      sessionToken += 1;
+      resetTransientQueues();
+
+      set({
+        appPhase: 'start',
+        loadError: null,
+        startMenuOpen: false,
+        notificationsOpen: false,
+        typingContactId: null,
+        sendingEmailChoice: null,
+        mailSyncing: false,
+        toasts: [],
+      });
+    },
+
     openScenarioSelector: (preselectId) => {
-      localStorage.removeItem(ACTIVE_SCENARIO_KEY);
       sessionToken += 1;
       resetTransientQueues();
 
       set((state) => ({
         appPhase: 'select_scenario',
+        loadError: null,
         pendingScenarioId:
           preselectId ?? state.scenarioId ?? state.availableScenarios[0]?.id ?? null,
         startMenuOpen: false,
@@ -1868,6 +1936,23 @@ export const useOsStore = create<OsState>((set, get) => {
         mailSyncing: false,
         toasts: [],
       }));
+    },
+
+    beginScenario: (scenarioId) => {
+      const scenario = get().availableScenarios.find((s) => s.id === scenarioId);
+      const prompt = normalizePlayerPrompt(
+        scenario?.playerPrompt,
+        resolveLocale(scenario?.locale)
+      );
+      if (prompt) {
+        set({
+          appPhase: 'scenario_setup',
+          pendingScenarioId: scenarioId,
+          loadError: null,
+        });
+      } else {
+        void get().loadScenario(scenarioId, { forceReset: true });
+      }
     },
 
     loadScenario: async (scenarioId, opts) => {
@@ -2067,7 +2152,24 @@ export const useOsStore = create<OsState>((set, get) => {
       const id = state.scenarioId || 'demo';
       if (opts?.returnToSetup && normalizePlayerPrompt(state.manifest?.playerPrompt)) {
         localStorage.removeItem(`${STORAGE_PREFIX}${id}`);
-        get().openScenarioSelector(id);
+        if (localStorage.getItem(ACTIVE_SCENARIO_KEY) === id) {
+          localStorage.removeItem(ACTIVE_SCENARIO_KEY);
+        }
+        sessionToken += 1;
+        resetTransientQueues();
+        set((s) => ({
+          appPhase: 'scenario_setup',
+          pendingScenarioId: id,
+          savedProgressVersion: s.savedProgressVersion + 1,
+          playerVariables: {},
+          startMenuOpen: false,
+          notificationsOpen: false,
+          typingContactId: null,
+          sendingEmailChoice: null,
+          mailSyncing: false,
+          toasts: [],
+          loadError: null,
+        }));
         return;
       }
       await get().loadScenario(id, {

@@ -46,7 +46,7 @@ Register every new scenario in `scenarios/index.json` (or `public/scenarios/inde
   "playerPrompt": {
     "enabled": true,
     "variableName": "player_name",
-    "label": "Analyst Name",
+    "label": "Your Name",
     "placeholder": "e.g. Alex Mercer",
     "helperText": "Colleagues and shift briefings will address you by this name.",
     "required": true

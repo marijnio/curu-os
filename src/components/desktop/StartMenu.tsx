@@ -2,6 +2,7 @@ import {
   Bug,
   ChevronRight,
   Folder,
+  Home,
   Layers,
   LogOut,
   Mail,
@@ -21,6 +22,7 @@ export function StartMenu() {
   const windows = useOsStore((s) => s.windows);
   const openApp = useOsStore((s) => s.openApp);
   const closeApp = useOsStore((s) => s.closeApp);
+  const openStartScreen = useOsStore((s) => s.openStartScreen);
   const openScenarioSelector = useOsStore((s) => s.openScenarioSelector);
   const logout = useOsStore((s) => s.logout);
   const toggleStartMenu = useOsStore((s) => s.toggleStartMenu);
@@ -111,6 +113,17 @@ export function StartMenu() {
             {manifest.title}
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => openStartScreen()}
+          className="flex w-full items-center justify-between px-3.5 py-2 text-xs text-slate-200 hover:bg-[#2a2f3a] cursor-pointer"
+        >
+          <span className="flex items-center gap-2.5">
+            <Home className="h-3.5 w-3.5 text-slate-400" />
+            {t.startMenu.returnToStartScreen}
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+        </button>
         <button
           type="button"
           onClick={() => openScenarioSelector()}

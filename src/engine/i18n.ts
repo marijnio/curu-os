@@ -117,6 +117,7 @@ export interface UiTranslations {
     signedInAs: (name: string) => string;
     applications: string;
     scenario: string;
+    returnToStartScreen: string;
     switchScenario: string;
     directorInspector: string;
     on: string;
@@ -174,6 +175,7 @@ export interface UiTranslations {
     unlockWorkstation: string;
     selectScenarioPrompt: string;
     scenarioCount: (count: number) => string;
+    backToStart: string;
     signOut: string;
     retry: string;
     noScenariosFound: string;
@@ -190,6 +192,21 @@ export interface UiTranslations {
     launching: string;
     startScenario: string;
     loadingScenario: string;
+  };
+  startScreen: {
+    subtitle: string;
+    welcomePrompt: string;
+    lastSession: string;
+    resumeSession: string;
+    selectScenario: string;
+    resuming: string;
+  };
+  scenarioSetup: {
+    badge: string;
+    promptSubtitle: string;
+    backToScenarios: string;
+    enterWorkstation: string;
+    entering: string;
   };
 }
 
@@ -321,6 +338,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       signedInAs: (name) => `Signed in as ${name}`,
       applications: 'Applications',
       scenario: 'Scenario',
+      returnToStartScreen: 'Start Screen',
       switchScenario: 'Switch Scenario...',
       directorInspector: 'Director / Debug Inspector',
       on: 'ON',
@@ -380,6 +398,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       selectScenarioPrompt: 'Select a scenario to start your shift',
       scenarioCount: (count) =>
         `${count} ${count === 1 ? 'Scenario' : 'Scenarios'}`,
+      backToStart: 'Back',
       signOut: 'Sign Out',
       retry: 'Retry',
       noScenariosFound: 'No scenarios were found in the scenario index.',
@@ -396,6 +415,21 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       launching: 'Launching...',
       startScenario: 'Start Scenario',
       loadingScenario: 'Loading scenario...',
+    },
+    startScreen: {
+      subtitle: 'Narrative Workstation Simulator',
+      welcomePrompt: 'Select a scenario to begin your shift.',
+      lastSession: 'Last Active Session',
+      resumeSession: 'Resume Session',
+      selectScenario: 'Select Scenario',
+      resuming: 'Resuming session...',
+    },
+    scenarioSetup: {
+      badge: 'SIGN-IN',
+      promptSubtitle: 'Sign in to this workstation to begin your shift.',
+      backToScenarios: 'Back',
+      enterWorkstation: 'Enter Workstation',
+      entering: 'Entering workstation...',
     },
   },
   nl: {
@@ -526,6 +560,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       signedInAs: (name) => `Ingelogd als ${name}`,
       applications: 'Toepassingen',
       scenario: 'Scenario',
+      returnToStartScreen: 'Startscherm',
       switchScenario: 'Scenario wisselen...',
       directorInspector: 'Director / Debug Inspector',
       on: 'AAN',
@@ -585,6 +620,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       selectScenarioPrompt: 'Selecteer een scenario om te beginnen',
       scenarioCount: (count) =>
         `${count} ${count === 1 ? 'scenario' : 'scenario’s'}`,
+      backToStart: 'Terug',
       signOut: 'Uitloggen',
       retry: 'Opnieuw',
       noScenariosFound: 'Geen scenario’s gevonden in de scenario-index.',
@@ -601,6 +637,21 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       launching: 'Starten...',
       startScenario: 'Scenario starten',
       loadingScenario: 'Scenario laden...',
+    },
+    startScreen: {
+      subtitle: 'Werkpleksimulatie',
+      welcomePrompt: 'Selecteer een scenario om je dienst te beginnen.',
+      lastSession: 'Laatst actieve sessie',
+      resumeSession: 'Sessie hervatten',
+      selectScenario: 'Scenario kiezen',
+      resuming: 'Sessie hervatten...',
+    },
+    scenarioSetup: {
+      badge: 'INLOGGEN',
+      promptSubtitle: 'Meld je aan bij deze werkplek om je dienst te beginnen.',
+      backToScenarios: 'Terug',
+      enterWorkstation: 'Werkplek openen',
+      entering: 'Werkplek laden...',
     },
   },
 };
