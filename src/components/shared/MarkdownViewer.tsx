@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { resolveScenarioAssetUrl } from '../../engine/scenarioLoader';
 import { useOsStore } from '../../store/useOsStore';
+
+const REMARK_PLUGINS = [remarkGfm];
+
+const MARKDOWN_COMPONENTS: Components = {
+  table: ({ node: _node, children, ...props }) => (
+    <div className="curu-markdown-table-wrap">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+};
 
 interface MarkdownViewerProps {
   path: string;
@@ -66,7 +77,12 @@ export function MarkdownViewer({ path }: MarkdownViewerProps) {
 
   return (
     <div className="curu-markdown">
-      <ReactMarkdown>{content ?? ''}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={REMARK_PLUGINS}
+        components={MARKDOWN_COMPONENTS}
+      >
+        {content ?? ''}
+      </ReactMarkdown>
     </div>
   );
 }

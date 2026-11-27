@@ -133,6 +133,12 @@
   color: #0f172a;
 }
 
+.curu-markdown-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.9rem 0;
+}
+
 .curu-markdown table {
   width: 100%;
   border-collapse: collapse;
@@ -140,10 +146,19 @@
   font-size: 0.83rem;
 }
 
+.curu-markdown-table-wrap table {
+  margin: 0;
+}
+
 .curu-markdown th,
 .curu-markdown td {
   border: 1px solid #e5e7eb;
   padding: 0.45rem 0.65rem;
+  vertical-align: top;
+}
+
+.curu-markdown th:not([align]),
+.curu-markdown td:not([align]) {
   text-align: left;
 }
 
@@ -151,6 +166,11 @@
   background: #f8fafc;
   color: #111827;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.curu-markdown td code {
+  white-space: nowrap;
 }
 
 .curu-markdown hr {
