@@ -39,12 +39,17 @@ export interface UiTranslations {
     attachmentPreview: string;
     noMessagesWith: (name: string) => string;
     chooseReply: string;
+    typeReply: string;
+    inputPlaceholder: string;
+    sendButton: string;
     isTyping: (name: string) => string;
     hookAudio: string;
     hookEmail: string;
     hookNote: string;
     hookFile: string;
     waitingInMail: string;
+    waitingInChat: (name: string) => string;
+    replyBadge: string;
     activeInOtherThread: string;
     noReplyNeeded: string;
     selectContact: string;
@@ -124,6 +129,7 @@ export interface UiTranslations {
     startMenuTooltip: (osName: string) => string;
     startMenuAria: (osName: string) => string;
     directorShort: string;
+    pendingReply: string;
   };
   systemTray: {
     unmuteAudio: string;
@@ -153,6 +159,8 @@ export interface UiTranslations {
     playVoiceNote: string;
     audioProgress: string;
     loadingDocument: string;
+    copyToClipboard: string;
+    copied: string;
   };
   selector: {
     initializing: string;
@@ -233,12 +241,17 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       attachmentPreview: 'Sent a file',
       noMessagesWith: (name) => `No messages with ${name} yet.`,
       chooseReply: 'Choose a reply',
+      typeReply: 'Type a reply',
+      inputPlaceholder: 'Type your response...',
+      sendButton: 'Send',
       isTyping: (name) => `${name} is typing...`,
       hookAudio: 'Listen to the voice note to continue.',
       hookEmail: 'Open and read the incoming email in Mail to continue.',
       hookNote: 'Open the note in Notes to continue.',
       hookFile: 'Open the shared file in File Explorer to continue.',
       waitingInMail: 'A reply is waiting in Mail.',
+      waitingInChat: (name) => `Reply waiting in ${name}'s chat`,
+      replyBadge: 'Reply',
       activeInOtherThread: 'Active conversation is in another thread.',
       noReplyNeeded: 'No reply needed right now.',
       selectContact: 'Select a contact to view messages.',
@@ -319,6 +332,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       startMenuTooltip: (osName) => `${osName} Menu`,
       startMenuAria: (osName) => `${osName} Start Menu`,
       directorShort: 'Director',
+      pendingReply: 'Reply waiting',
     },
     systemTray: {
       unmuteAudio: 'Unmute audio',
@@ -348,6 +362,8 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       playVoiceNote: 'Play voice note',
       audioProgress: 'Audio playback progress',
       loadingDocument: 'Loading document...',
+      copyToClipboard: 'Click to copy',
+      copied: 'Copied',
     },
     selector: {
       initializing: 'Initializing workspace...',
@@ -428,12 +444,17 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       attachmentPreview: 'Bestand verzonden',
       noMessagesWith: (name) => `Nog geen berichten met ${name}.`,
       chooseReply: 'Kies een antwoord',
+      typeReply: 'Typ een antwoord',
+      inputPlaceholder: 'Typ je antwoord...',
+      sendButton: 'Versturen',
       isTyping: (name) => `${name} is aan het typen...`,
       hookAudio: 'Beluister het spraakbericht om door te gaan.',
       hookEmail: 'Open en lees de binnengekomen e-mail in Mail om door te gaan.',
       hookNote: 'Open de notitie in Notities om door te gaan.',
       hookFile: 'Open het gedeelde bestand in Bestanden om door te gaan.',
       waitingInMail: 'Er wacht een antwoord in Mail.',
+      waitingInChat: (name) => `Er wacht een antwoord in de chat met ${name}`,
+      replyBadge: 'Antwoord',
       activeInOtherThread: 'Het actieve gesprek bevindt zich in een andere chat.',
       noReplyNeeded: 'Momenteel geen reactie nodig.',
       selectContact: 'Selecteer een contact om berichten te bekijken.',
@@ -515,6 +536,7 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       startMenuTooltip: (osName) => `${osName}-menu`,
       startMenuAria: (osName) => `${osName}-startmenu`,
       directorShort: 'Director',
+      pendingReply: 'Antwoord wacht',
     },
     systemTray: {
       unmuteAudio: 'Geluid aanzetten',
@@ -544,6 +566,8 @@ export const TRANSLATIONS: Record<ScenarioLocale, UiTranslations> = {
       playVoiceNote: 'Spraakbericht afspelen',
       audioProgress: 'Voortgang van audio',
       loadingDocument: 'Document laden...',
+      copyToClipboard: 'Klik om te kopiëren',
+      copied: 'Gekopieerd',
     },
     selector: {
       initializing: 'Werkomgeving initialiseren...',

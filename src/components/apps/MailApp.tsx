@@ -13,6 +13,7 @@ import { selectTranslations } from '../../engine/i18n';
 import { normalizePlayerPrompt } from '../../engine/templateVars';
 import { useOsStore } from '../../store/useOsStore';
 import { AttachmentCard } from '../shared/AttachmentCard';
+import { RichText, stripInlineMarkdown } from '../shared/RichText';
 
 export function MailApp() {
   const emails = useOsStore((s) => s.emails);
@@ -199,7 +200,7 @@ export function MailApp() {
 
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[11px] text-slate-500">
-                      {email.body[0] || ''}
+                      {stripInlineMarkdown(email.body[0] || '')}
                     </span>
                     {email.attachments.length > 0 && (
                       <Paperclip className="h-3 w-3 shrink-0 text-slate-400" />
@@ -278,7 +279,7 @@ export function MailApp() {
               <div className="space-y-3 text-[13.5px] leading-relaxed text-[#1f2328]">
                 {activeEmail.body.map((para, idx) => (
                   <p key={idx} className="whitespace-pre-wrap">
-                    {para}
+                    <RichText text={para} />
                   </p>
                 ))}
               </div>

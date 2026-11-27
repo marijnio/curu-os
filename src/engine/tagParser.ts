@@ -31,6 +31,14 @@ export interface ParsedContactStatusTag {
   status: 'online' | 'away' | 'offline';
 }
 
+export interface ParsedInputTag {
+  variableName: string;
+  placeholder?: string;
+  buttonLabel?: string;
+  targetContactId?: string;
+  targetKnot: string;
+}
+
 export interface ParsedTagBundle {
   channel?: Channel;
   sender?: string;
@@ -45,6 +53,7 @@ export interface ParsedTagBundle {
   contactUnlocks: string[];
   contactStatuses: ParsedContactStatusTag[];
   eventHooks: ParsedEventHookTag[];
+  input?: ParsedInputTag;
   flagEmail: boolean;
   typingDelayMs?: number;
   silent: boolean;
@@ -330,6 +339,50 @@ export function parseInkTags(rawTags: string[]): ParsedTagBundle {
         if (!Number.isNaN(ms) && ms >= 0) {
           bundle.typingDelayMs = ms;
         }
+        break;
+      }
+      case 'INPUT': {
+        const colonIdx = trimmed.indexOf(':');
+        const rawBody = colonIdx === -1 ? '' : trimmed.slice(colonIdx + 1).trim();
+        const arrowMatch = /^(.*?)\s*(?:=>|->)\s*([A-Za-z0-9_.]+)\s*$/.exec(rawBody);
+        if (!arrowMatch) {
+          bundle.unknownTags.push(trimmed);
+          break;
+        }
+        const beforeArrow = arrowMatch[1].trim();
+        const targetKnot = arrowMatch[2].trim();
+        const inputParts = beforeArrow
+          .split('|')
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const variableName = inputParts[0] ?? '';
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variableName)) {
+          bundle.unknownTags.push(trimmed);
+          break;
+        }
+
+        let placeholder: string | undefined;
+        let buttonLabel: string | undefined;
+        let targetContactId: string | undefined;
+        for (const extra of inputParts.slice(1)) {
+          const kv = splitKeyColon(extra);
+          if (!kv) continue;
+          if (kv.key === 'PLACEHOLDER' && kv.value) {
+            placeholder = kv.value;
+          } else if (kv.key === 'BUTTON' && kv.value) {
+            buttonLabel = kv.value;
+          } else if (kv.key === 'TARGET' && kv.value) {
+            targetContactId = kv.value;
+          }
+        }
+
+        bundle.input = {
+          variableName,
+          placeholder,
+          buttonLabel,
+          targetContactId,
+          targetKnot,
+        };
         break;
       }
       default: {

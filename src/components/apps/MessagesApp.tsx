@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
-import { Pin, MessageCircle, Lock } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Lock, Mail, MessageCircle, Pin, Send } from 'lucide-react';
 import { selectTranslations } from '../../engine/i18n';
 import { useOsStore } from '../../store/useOsStore';
 import { AudioPlayer } from '../shared/AudioPlayer';
 import { AttachmentCard } from '../shared/AttachmentCard';
+import { RichText, stripInlineMarkdown } from '../shared/RichText';
 
 export function MessagesApp() {
   const contacts = useOsStore((s) => s.contacts);
@@ -13,13 +14,17 @@ export function MessagesApp() {
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
   const typingContactId = useOsStore((s) => s.typingContactId);
   const activeChoices = useOsStore((s) => s.activeChoices);
+  const pendingInput = useOsStore((s) => s.pendingInput);
   const pendingHooks = useOsStore((s) => s.pendingHooks);
 
   const selectContact = useOsStore((s) => s.selectContact);
   const selectChoice = useOsStore((s) => s.selectChoice);
+  const submitFreeTextInput = useOsStore((s) => s.submitFreeTextInput);
+  const openApp = useOsStore((s) => s.openApp);
   const openFileInExplorer = useOsStore((s) => s.openFileInExplorer);
   const t = useOsStore(selectTranslations);
 
+  const [draftText, setDraftText] = useState('');
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
   const visibleContacts = contacts.filter(
@@ -43,15 +48,52 @@ export function MessagesApp() {
       )
     : [];
 
+  const activeThreadInput =
+    activeContact &&
+    pendingInput &&
+    pendingInput.targetContactId === activeContact.id
+      ? pendingInput
+      : null;
+
+  const otherChatTargetIds = Array.from(
+    new Set([
+      ...activeChoices
+        .filter(
+          (c) =>
+            c.channel === 'chat' &&
+            (!activeContact || c.targetId !== activeContact.id)
+        )
+        .map((c) => c.targetId),
+      ...(pendingInput &&
+      (!activeContact || pendingInput.targetContactId !== activeContact.id)
+        ? [pendingInput.targetContactId]
+        : []),
+    ])
+  );
+  const otherChatTargetContacts = otherChatTargetIds
+    .map((id) => visibleContacts.find((c) => c.id === id))
+    .filter((c): c is (typeof visibleContacts)[number] => Boolean(c));
+  const hasOtherChatChoices = otherChatTargetIds.length > 0;
+  const hasEmailChoices = activeChoices.some((c) => c.channel === 'email');
+
   const isTyping = Boolean(activeContact && typingContactId === activeContact.id);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [threadMessages.length, isTyping, activeContact?.id]);
+  }, [threadMessages.length, isTyping, activeContact?.id, Boolean(activeThreadInput)]);
+
+  useEffect(() => {
+    setDraftText('');
+  }, [pendingInput?.targetContactId, pendingInput?.variableName]);
 
   const renderContactRow = (contact: (typeof contacts)[number]) => {
     const isActive = activeContact?.id === contact.id;
     const unread = unreadChatCounts[contact.id] ?? 0;
+    const hasPendingReply =
+      activeChoices.some(
+        (c) => c.channel === 'chat' && c.targetId === contact.id
+      ) || pendingInput?.targetContactId === contact.id;
+    const showPendingReply = hasPendingReply && !isActive;
     const contactMsgs = chatMessages.filter((m) => m.contactId === contact.id);
     const lastMsg = contactMsgs[contactMsgs.length - 1];
 
@@ -60,7 +102,7 @@ export function MessagesApp() {
         ? t.messages.voiceMessagePreview
         : lastMsg.kind === 'attachment'
           ? t.messages.attachmentPreview
-          : lastMsg.text
+          : stripInlineMarkdown(lastMsg.text)
       : contact.role;
 
     return (
@@ -71,7 +113,9 @@ export function MessagesApp() {
         className={`flex w-full items-center gap-2.5 border-l-2 px-3 py-2.5 text-left transition-colors cursor-pointer ${
           isActive
             ? 'border-l-[#0067c0] bg-[#e6f0fa]'
-            : 'border-l-transparent hover:bg-slate-200/60'
+            : showPendingReply
+              ? 'border-l-[#0067c0]/60 bg-[#f0f7fe] hover:bg-[#e5f1fb]'
+              : 'border-l-transparent hover:bg-slate-200/60'
         }`}
       >
         <div className="relative shrink-0">
@@ -105,11 +149,19 @@ export function MessagesApp() {
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <span className="truncate text-[11px] text-slate-500">{preview}</span>
-            {unread > 0 && (
-              <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#25b864] px-1 text-[10px] font-bold text-white">
-                {unread}
-              </span>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {showPendingReply && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#0067c0] px-1.5 py-0.5 text-[9.5px] font-semibold leading-none text-white">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-200" />
+                  {t.messages.replyBadge}
+                </span>
+              )}
+              {unread > 0 && (
+                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#25b864] px-1 text-[10px] font-bold text-white">
+                  {unread}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </button>
@@ -205,7 +257,7 @@ export function MessagesApp() {
                     >
                       {msg.text && (
                         <p className="text-[13px] leading-relaxed whitespace-pre-wrap">
-                          {msg.text}
+                          <RichText text={msg.text} />
                         </p>
                       )}
 
@@ -250,7 +302,7 @@ export function MessagesApp() {
               <div ref={threadEndRef} />
             </div>
 
-            {/* Multiple-Choice Response Footer (no free-text typing) */}
+            {/* Response Footer (multiple-choice or scenario-driven free-text input) */}
             <footer className="border-t border-slate-200 bg-[#f7f8fa] px-4 py-3">
               {threadChoices.length > 0 ? (
                 <div className="space-y-2">
@@ -270,25 +322,91 @@ export function MessagesApp() {
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : activeThreadInput ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const trimmed = draftText.trim();
+                    if (!trimmed) return;
+                    submitFreeTextInput(trimmed);
+                    setDraftText('');
+                  }}
+                  className="space-y-1.5"
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {t.messages.typeReply}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={draftText}
+                      onChange={(e) => setDraftText(e.target.value)}
+                      placeholder={
+                        activeThreadInput.placeholder || t.messages.inputPlaceholder
+                      }
+                      className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#0067c0] focus:ring-2 focus:ring-[#0067c0]/15"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!draftText.trim()}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#0067c0] px-3.5 py-1.5 text-xs font-medium text-white shadow-2xs transition hover:bg-[#005aa8] disabled:cursor-not-allowed disabled:opacity-45 cursor-pointer"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>
+                        {activeThreadInput.buttonLabel || t.messages.sendButton}
+                      </span>
+                    </button>
+                  </div>
+                </form>
+              ) : isTyping || pendingHooks.length > 0 ? (
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                   <span>
                     {isTyping
                       ? t.messages.isTyping(activeContact.name)
-                      : pendingHooks.length > 0
-                        ? pendingHooks[0].event === 'on_audio_play'
-                          ? t.messages.hookAudio
-                          : pendingHooks[0].event === 'on_email_read'
-                            ? t.messages.hookEmail
-                            : pendingHooks[0].event === 'on_note_open'
-                              ? t.messages.hookNote
-                              : t.messages.hookFile
-                        : activeChoices.some((c) => c.channel === 'email')
-                          ? t.messages.waitingInMail
-                          : activeChoices.length > 0
-                            ? t.messages.activeInOtherThread
-                            : t.messages.noReplyNeeded}
+                      : pendingHooks[0].event === 'on_audio_play'
+                        ? t.messages.hookAudio
+                        : pendingHooks[0].event === 'on_email_read'
+                          ? t.messages.hookEmail
+                          : pendingHooks[0].event === 'on_note_open'
+                            ? t.messages.hookNote
+                            : t.messages.hookFile}
+                  </span>
+                </div>
+              ) : otherChatTargetContacts.length > 0 || hasEmailChoices ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {otherChatTargetContacts.map((targetContact) => (
+                    <button
+                      key={targetContact.id}
+                      type="button"
+                      onClick={() => selectContact(targetContact.id)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#b9d7f2] bg-[#eef6fc] px-3 py-1.5 text-xs font-medium text-[#005aa8] transition hover:border-[#0067c0] hover:bg-[#e1effb] hover:text-[#004585] cursor-pointer"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t.messages.waitingInChat(targetContact.name)}</span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                    </button>
+                  ))}
+                  {hasEmailChoices && (
+                    <button
+                      type="button"
+                      onClick={() => openApp('mail')}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#b9d7f2] bg-[#eef6fc] px-3 py-1.5 text-xs font-medium text-[#005aa8] transition hover:border-[#0067c0] hover:bg-[#e1effb] hover:text-[#004585] cursor-pointer"
+                    >
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t.messages.waitingInMail}</span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span>
+                    {hasOtherChatChoices
+                      ? t.messages.activeInOtherThread
+                      : t.messages.noReplyNeeded}
                   </span>
                 </div>
               )}

@@ -142,6 +142,7 @@ Curu-OS interprets Ink `#` tags attached to story lines and choices as desktop O
 | `# EVENT_HOOK: on_audio_play:<path> [=> <knot>]` | Fires when `<path>` starts playing in Messages or File Explorer (works with both real audio and simulated fallback). |
 | `# EVENT_HOOK: on_email_read:<matcher> [=> <knot>]` | Fires when a matching email is opened in Mail (`sender:<id>`, `subject:<text>`, or bare `<id_or_subject>`). |
 | `# EVENT_HOOK: on_note_open:<id_or_title> [=> <knot>]` | Fires when a matching note is selected in Notes (`id:<note_id>`, `title:<text>`, or bare `<id_or_title>`). |
+| `# INPUT: <ink_var> \| placeholder: <hint> [\| button: <label>] [\| target: <contact_id>] => <knot>` | Pauses the story and shows a free-text input box in the targeted contact's Messages thread (defaults `target` to active `# SENDER` and `button` to localized `"Send"`). Escape `\|` as `\\|` in `.ink` source. |
 | `# FLAG_EMAIL` | Marks the active email as flagged in Mail. |
 | `# TYPING_DELAY: <ms>` | Overrides typing indicator duration in ms for the current chat line. |
 | `# SILENT` | Placed on an Ink choice to avoid echoing the choice text as an outgoing player chat bubble. |
@@ -189,6 +190,46 @@ Attach `# EVENT_HOOK:` on a spoken line and use `-> DONE` right after so the sto
 Open the briefing to proceed. # EVENT_HOOK: on_file_open:docs/day1_briefing.md => after_briefing_opened
 -> DONE
 ```
+
+### Free-Text Chat Input (`# INPUT:`)
+Use `# INPUT:` when you want the player to type a genuine observation or short message in **Messages** instead of picking from multiple-choice buttons:
+
+```ink
+VAR observation_report = ""
+
+=== ask_observation ===
+# CHANNEL: chat
+# SENDER: jan_smit
+Wat zie je op de foto in de map Afbeeldingen? Beschrijf kort wat opvalt.
+# INPUT: observation_report \| placeholder: Beschrijf je observatie... \| button: Versturen \| target: jan_smit => after_observation
+-> DONE
+
+=== after_observation ===
+# CHANNEL: chat
+# SENDER: jan_smit
+Helder, dank je wel voor je bericht ("{observation_report}"). Ik log het direct.
+-> END
+```
+
+- `target` defaults to the active `# SENDER` when omitted, and `button` defaults to `"Send"` (or `"Versturen"` when `locale: "nl"`).
+- Submitting appends the player's message as an outgoing chat bubble, writes the text to `VAR <ink_var>` (when declared in `.ink`) and template variables (`{var}` in Ink / `{{var}}` in Markdown/notes), logs the full submission to the **Director Inspector** Event Log (`input`), and jumps to `=> <knot>`.
+- If the player is viewing another contact thread when `# INPUT:` activates, Messages highlights the target thread in the sidebar and shows a clickable footer jump button.
+
+### Inline Formatting & Click-to-Copy Chips
+Chat messages in **Messages** (both incoming and outgoing) and email body paragraphs in **Mail** support lightweight, safe inline Markdown without raw HTML:
+- `**bold**` renders as **bold** emphasis (useful for step headings or warnings).
+- `*italic*` renders as *italic* emphasis.
+- `` `value` `` renders as an interactive **click-to-copy** monospace chip that copies the literal text inside the backticks to the player's clipboard and shows a brief `"Copied"` / `"Gekopieerd"` confirmation.
+
+This is especially helpful when Curu-OS acts as a companion workbench alongside an external application, letting players copy exact values with one click:
+
+```ink
+# CHANNEL: chat
+# SENDER: jan_smit
+**Stap 1:** Open zaak `DH1` op adres `Ringbaan Noord 97, Tilburg` en maak taak `camera spotten` aan.
+```
+
+Plain text without Markdown delimiters and line breaks render as-is, and Ink `{variable}` interpolation runs before inline formatting so interpolated values inside `` `{case_id}` `` are also copyable.
 
 ---
 

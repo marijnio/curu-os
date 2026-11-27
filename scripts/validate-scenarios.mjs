@@ -60,6 +60,8 @@ function checkAssetPath({
 
 function scanInkTags(inkSource) {
   const contactRefs = [];
+  const inputTargetRefs = [];
+  const inputVars = [];
   const assets = [];
   const tagErrors = [];
 
@@ -97,7 +99,8 @@ function scanInkTags(inkSource) {
           key === 'SET_TIME' ||
           key === 'CONTACT_STATUS' ||
           key === 'EVENT_HOOK' ||
-          key === 'NOTE_ADD'
+          key === 'NOTE_ADD' ||
+          key === 'INPUT'
         ) {
           tagErrors.push({ lineNum, message: `Empty value in # ${key}` });
         }
@@ -189,11 +192,65 @@ function scanInkTags(inkSource) {
             });
           }
         }
+      } else if (key === 'INPUT') {
+        const rawBody = normalizedTag.slice(normalizedTag.indexOf(':') + 1).trim();
+        const arrowMatch = /^(.*?)\s*(?:=>|->)\s*([A-Za-z0-9_.]+)\s*$/.exec(rawBody);
+        if (!arrowMatch) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # INPUT "${rawBody}" (expected <var_name> | ... => <target_knot>)`,
+          });
+          continue;
+        }
+        const beforeArrow = arrowMatch[1].trim();
+        const inputParts = beforeArrow
+          .split('|')
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const variableName = inputParts[0] ?? '';
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variableName)) {
+          tagErrors.push({
+            lineNum,
+            message: `Invalid # INPUT variable name "${variableName}" (expected /^[A-Za-z_][A-Za-z0-9_]*$/)`,
+          });
+          continue;
+        }
+        inputVars.push({ variableName, lineNum });
+
+        for (const extra of inputParts.slice(1)) {
+          const extraColon = extra.indexOf(':');
+          if (extraColon === -1) {
+            tagErrors.push({
+              lineNum,
+              message: `Invalid # INPUT parameter "${extra}" (expected placeholder:<text>, button:<label>, or target:<contact_id>)`,
+            });
+            continue;
+          }
+          const paramKey = extra.slice(0, extraColon).trim().toLowerCase();
+          const paramVal = extra.slice(extraColon + 1).trim();
+          if (
+            paramKey !== 'placeholder' &&
+            paramKey !== 'button' &&
+            paramKey !== 'target'
+          ) {
+            tagErrors.push({
+              lineNum,
+              message: `Unknown # INPUT parameter "${paramKey}" (expected placeholder, button, or target)`,
+            });
+          } else if (!paramVal) {
+            tagErrors.push({
+              lineNum,
+              message: `Empty ${paramKey} in # INPUT`,
+            });
+          } else if (paramKey === 'target') {
+            inputTargetRefs.push({ id: paramVal, lineNum });
+          }
+        }
       }
     }
   }
 
-  return { contactRefs, assets, tagErrors };
+  return { contactRefs, inputTargetRefs, inputVars, assets, tagErrors };
 }
 
 export function validateScenarios(scenariosDir = resolveScenariosDir()) {
@@ -475,7 +532,8 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
       }
     }
     for (const [relInkPath, inkSource] of Object.entries(inkFiles)) {
-      const { contactRefs, assets, tagErrors } = scanInkTags(inkSource);
+      const { contactRefs, inputTargetRefs, inputVars, assets, tagErrors } =
+        scanInkTags(inkSource);
       for (const err of tagErrors) {
         errors.push(`[${scenarioId}] ${relInkPath}:${err.lineNum} ${err.message}`);
       }
@@ -483,6 +541,22 @@ export function validateScenarios(scenariosDir = resolveScenariosDir()) {
         if (!contactIds.has(ref.id)) {
           warnings.push(
             `[${scenarioId}] ${relInkPath}:${ref.lineNum} references # ${ref.tag}: "${ref.id}" which is not in scenario.json contacts[].`
+          );
+        }
+      }
+      for (const ref of inputTargetRefs) {
+        if (!contactIds.has(ref.id)) {
+          errors.push(
+            `[${scenarioId}] ${relInkPath}:${ref.lineNum} # INPUT target "${ref.id}" is not in scenario.json contacts[].`
+          );
+        }
+      }
+      for (const iv of inputVars) {
+        const varDeclRe = new RegExp(`^\\s*VAR\\s+${iv.variableName}\\b`, 'm');
+        const hasVarDecl = Object.values(inkFiles).some((src) => varDeclRe.test(src));
+        if (!hasVarDecl) {
+          warnings.push(
+            `[${scenarioId}] ${relInkPath}:${iv.lineNum} # INPUT uses "${iv.variableName}", but no \`VAR ${iv.variableName} = ""\` declaration was found in .ink files.`
           );
         }
       }

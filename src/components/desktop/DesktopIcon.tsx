@@ -5,6 +5,8 @@ interface DesktopIconProps {
   label: string;
   icon: ReactNode;
   badgeCount?: number;
+  hasPendingAction?: boolean;
+  pendingActionTitle?: string;
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
@@ -14,6 +16,8 @@ export function DesktopIcon({
   label,
   icon,
   badgeCount = 0,
+  hasPendingAction = false,
+  pendingActionTitle,
   selected,
   onSelect,
   onOpen,
@@ -21,6 +25,11 @@ export function DesktopIcon({
   return (
     <button
       type="button"
+      title={
+        hasPendingAction && pendingActionTitle
+          ? `${label} — ${pendingActionTitle}`
+          : undefined
+      }
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -42,10 +51,20 @@ export function DesktopIcon({
           <ArrowUpRight className="h-2.5 w-2.5 text-[#005fb8] stroke-[2.5]" />
         </span>
 
-        {badgeCount > 0 && (
+        {badgeCount > 0 ? (
           <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d93025] px-1 text-[10px] font-bold text-white shadow">
             {badgeCount > 9 ? '9+' : badgeCount}
           </span>
+        ) : (
+          hasPendingAction && (
+            <span
+              title={pendingActionTitle}
+              aria-label={pendingActionTitle}
+              className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#0078d4] ring-2 ring-white/90 shadow"
+            >
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            </span>
+          )
         )}
       </div>
 

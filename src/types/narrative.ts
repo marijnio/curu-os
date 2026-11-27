@@ -40,6 +40,14 @@ export interface ActiveChoice {
   silent?: boolean;
 }
 
+export interface PendingChatInput {
+  variableName: string;
+  placeholder?: string;
+  buttonLabel?: string;
+  targetContactId: string;
+  targetKnot: string;
+}
+
 export type EventHookType =
   | 'on_file_open'
   | 'on_audio_play'
@@ -58,10 +66,12 @@ export interface EventHook {
 export interface DebugLogEntry {
   id: string;
   time: string;
+  realTime: string;
   type:
     | 'ink_line'
     | 'tag'
     | 'choice'
+    | 'input'
     | 'hook_registered'
     | 'hook_fired'
     | 'file_open'

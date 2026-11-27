@@ -8,6 +8,7 @@ import type {
   EmailMessage,
   EventHook,
   EventHookType,
+  PendingChatInput,
 } from '../types/narrative';
 import type {
   AppId,
@@ -92,7 +93,8 @@ type DispatchBeat =
     flagEmail: boolean;
   }
   | { kind: 'register_hook'; hook: EventHook }
-  | { kind: 'set_choices'; choices: ActiveChoice[] };
+  | { kind: 'set_choices'; choices: ActiveChoice[] }
+  | { kind: 'set_input'; input: PendingChatInput | null };
 
 const dispatchQueue: DispatchBeat[] = [];
 
@@ -112,9 +114,12 @@ export interface PersistedSnapshot {
   notes: NoteItem[];
   unreadNotesCount?: number;
   activeChoices: ActiveChoice[];
+  pendingInput?: PendingChatInput | null;
   pendingHooks: EventHook[];
   pausedByContinueHook: boolean;
   playerVariables?: Record<string, string>;
+  sessionStartedAt?: string | null;
+  debugLogs?: DebugLogEntry[];
 }
 
 export function getSavedScenarioMeta(
@@ -376,7 +381,9 @@ export interface OsState {
   activeSenderId: string;
   activeEmailDraftId: string | null;
   activeChoices: ActiveChoice[];
+  pendingInput: PendingChatInput | null;
   pendingHooks: EventHook[];
+  sessionStartedAt: string | null;
   debugLogs: DebugLogEntry[];
   checkpoints: CheckpointRecord[];
 
@@ -421,6 +428,7 @@ export interface OsState {
   onFileOpened: (filePath: string) => void;
   onAudioPlayed: (filePath: string) => void;
   selectChoice: (choiceIndex: number) => void;
+  submitFreeTextInput: (rawText: string) => void;
   forceTriggerHook: (hookId: string) => void;
 
   // Notes actions
@@ -448,10 +456,11 @@ export const useOsStore = create<OsState>((set, get) => {
     detail?: unknown
   ) {
     const time = formatClock24(get().clockMinutes);
+    const realTime = new Date().toISOString();
     set((state) => ({
       debugLogs: [
-        ...state.debugLogs.slice(-199),
-        { id: makeId('log'), time, type, summary, detail },
+        ...state.debugLogs.slice(-999),
+        { id: makeId('log'), time, realTime, type, summary, detail },
       ],
     }));
   }
@@ -605,9 +614,12 @@ export const useOsStore = create<OsState>((set, get) => {
       notes: state.notes,
       unreadNotesCount: state.unreadNotesCount,
       activeChoices: state.activeChoices,
+      pendingInput: state.pendingInput,
       pendingHooks: state.pendingHooks,
       pausedByContinueHook,
       playerVariables: state.playerVariables,
+      sessionStartedAt: state.sessionStartedAt,
+      debugLogs: state.debugLogs,
     };
   }
 
@@ -664,6 +676,21 @@ export const useOsStore = create<OsState>((set, get) => {
         : {};
     const templateVars = collectTemplateVars(playerVariables);
 
+    const nowIso = new Date().toISOString();
+    const sessionStartedAt =
+      typeof saved.sessionStartedAt === 'string' && saved.sessionStartedAt.trim()
+        ? saved.sessionStartedAt
+        : nowIso;
+    const restoredLogs: DebugLogEntry[] = Array.isArray(saved.debugLogs)
+      ? saved.debugLogs.map((entry) => ({
+          ...entry,
+          realTime:
+            typeof entry.realTime === 'string' && entry.realTime
+              ? entry.realTime
+              : sessionStartedAt,
+        }))
+      : [];
+
     set({
       appPhase: 'desktop',
       pendingScenarioId: null,
@@ -698,17 +725,21 @@ export const useOsStore = create<OsState>((set, get) => {
       activeSenderId: saved.activeSenderId,
       activeEmailDraftId: saved.activeEmailDraftId,
       activeChoices: saved.activeChoices,
+      pendingInput: saved.pendingInput ?? null,
       pendingHooks: saved.pendingHooks,
       playerVariables,
       templateVars,
+      sessionStartedAt,
       debugLogs: [
+        ...restoredLogs,
         {
           id: makeId('log'),
           time: formatClock24(saved.clockMinutes),
-          type: 'checkpoint',
+          realTime: nowIso,
+          type: 'checkpoint' as const,
           summary: reason,
         },
-      ],
+      ].slice(-1000),
     });
 
     persistSnapshot();
@@ -944,6 +975,10 @@ export const useOsStore = create<OsState>((set, get) => {
             set({ activeChoices: beat.choices });
             break;
           }
+          case 'set_input': {
+            set({ pendingInput: beat.input });
+            break;
+          }
         }
       }
       if (token === sessionToken) {
@@ -1013,6 +1048,7 @@ export const useOsStore = create<OsState>((set, get) => {
       'system_guide';
     let lastEmailSenderId: string | null = null;
     let shouldPauseForContinueHook = false;
+    let pendingInputForBeat: PendingChatInput | null = null;
 
     const maxSteps = 200;
     let steps = 0;
@@ -1224,6 +1260,27 @@ export const useOsStore = create<OsState>((set, get) => {
         }
       }
 
+      if (parsed.input) {
+        const resolvedInput: PendingChatInput = {
+          variableName: parsed.input.variableName,
+          placeholder: parsed.input.placeholder
+            ? interpolateTemplate(parsed.input.placeholder, vars)
+            : undefined,
+          buttonLabel: parsed.input.buttonLabel
+            ? interpolateTemplate(parsed.input.buttonLabel, vars)
+            : undefined,
+          targetContactId: parsed.input.targetContactId || currentSenderId,
+          targetKnot: parsed.input.targetKnot,
+        };
+        pendingInputForBeat = resolvedInput;
+        dispatchQueue.push({ kind: 'set_input', input: resolvedInput });
+        appendDebugLog(
+          'input',
+          `Waiting for free-text input "${resolvedInput.variableName}" in [${resolvedInput.targetContactId}] => ${resolvedInput.targetKnot}`
+        );
+        break;
+      }
+
       if (shouldPauseForContinueHook) {
         break;
       }
@@ -1238,7 +1295,7 @@ export const useOsStore = create<OsState>((set, get) => {
       templateVars: latestVars,
     });
 
-    if (!shouldPauseForContinueHook) {
+    if (!shouldPauseForContinueHook && !pendingInputForBeat) {
       const choices: ActiveChoice[] = storyInstance.currentChoices.map((c) => {
         const choiceTags = parseInkTags(c.tags ?? []);
         const channel = choiceTags.channel ?? currentChannel;
@@ -1352,7 +1409,9 @@ export const useOsStore = create<OsState>((set, get) => {
     activeSenderId: 'system_guide',
     activeEmailDraftId: null,
     activeChoices: [],
+    pendingInput: null,
     pendingHooks: [],
+    sessionStartedAt: null,
     debugLogs: [],
     checkpoints: [],
 
@@ -1592,6 +1651,7 @@ export const useOsStore = create<OsState>((set, get) => {
           _globalVariables?: Map<string, unknown>;
           $: (name: string, val?: unknown) => unknown;
         };
+        const sessionStartedAt = new Date().toISOString();
         const injectedLogs: DebugLogEntry[] = [];
         for (const [key, val] of Object.entries(resolvedVars)) {
           if (vs._globalVariables?.has(key)) {
@@ -1600,6 +1660,7 @@ export const useOsStore = create<OsState>((set, get) => {
             injectedLogs.push({
               id: makeId('log'),
               time: startTimeStr,
+              realTime: sessionStartedAt,
               type: 'tag',
               summary: `Pre-start variable "${key}" is not declared as VAR in story.ink (available for Markdown {{${key}}} only).`,
             });
@@ -1645,13 +1706,16 @@ export const useOsStore = create<OsState>((set, get) => {
           activeSenderId: defaultContact ?? 'system_guide',
           activeEmailDraftId: null,
           activeChoices: [],
+          pendingInput: null,
           pendingHooks: [],
           playerVariables: resolvedVars,
           templateVars: initialTemplateVars,
+          sessionStartedAt,
           debugLogs: [
             {
               id: makeId('log'),
               time: startTimeStr,
+              realTime: sessionStartedAt,
               type: 'ink_line',
               summary: `Loaded "${manifest.title}" (source: ${compiledFrom})`,
             },
@@ -1991,12 +2055,15 @@ export const useOsStore = create<OsState>((set, get) => {
 
       appendDebugLog('audio_play', `Played audio: ${normalized}`);
 
-      fireMatchingHooks(
+      const fired = fireMatchingHooks(
         'on_audio_play',
         (h) =>
           h.target === normalized ||
           (h.target.split('/').pop() ?? h.target) === targetBasename
       );
+      if (!fired) {
+        persistSnapshot();
+      }
     },
 
     selectChoice: (choiceIndex) => {
@@ -2035,7 +2102,7 @@ export const useOsStore = create<OsState>((set, get) => {
       }
 
       appendDebugLog('choice', `Selected [${choice.channel}]: "${choice.text}"`);
-      set({ activeChoices: [] });
+      set({ activeChoices: [], pendingInput: null });
 
       try {
         storyInstance.ChooseChoiceIndex(choiceIndex);
@@ -2045,6 +2112,77 @@ export const useOsStore = create<OsState>((set, get) => {
           'error',
           `Choice execution failed: ${err instanceof Error ? err.message : String(err)}`
         );
+      }
+    },
+
+    submitFreeTextInput: (rawText) => {
+      const text = rawText.trim();
+      const input = get().pendingInput;
+      if (!text || !storyInstance || !input) return;
+
+      const timestamp = formatClock24(get().clockMinutes);
+      const playerBubble: ChatMessage = {
+        id: makeId('msg'),
+        contactId: input.targetContactId,
+        sender: 'player',
+        kind: 'text',
+        text,
+        timestamp,
+      };
+
+      let inkVarDeclared = false;
+      try {
+        const vs = storyInstance.variablesState as unknown as {
+          _globalVariables?: Map<string, unknown>;
+          $: (name: string, val?: unknown) => unknown;
+        };
+        if (vs._globalVariables?.has(input.variableName)) {
+          inkVarDeclared = true;
+          vs.$(input.variableName, text);
+        }
+      } catch {
+        // Ignore Ink variable write errors gracefully
+      }
+
+      const nextPlayerVars = {
+        ...get().playerVariables,
+        [input.variableName]: text,
+      };
+      const nextTemplateVars = collectTemplateVars(nextPlayerVars);
+
+      set((s) => ({
+        chatMessages: [...s.chatMessages, playerBubble],
+        pendingInput: null,
+        activeChoices: [],
+        playerVariables: nextPlayerVars,
+        templateVars: nextTemplateVars,
+        unreadChatCounts: {
+          ...s.unreadChatCounts,
+          [input.targetContactId]: 0,
+        },
+      }));
+
+      appendDebugLog(
+        'input',
+        `Submitted [${input.targetContactId}] ${input.variableName}: "${text}"`,
+        {
+          variableName: input.variableName,
+          targetContactId: input.targetContactId,
+          targetKnot: input.targetKnot,
+          text,
+          inkVarDeclared,
+        }
+      );
+
+      try {
+        storyInstance.ChoosePathString(input.targetKnot);
+        drainStory();
+      } catch (err) {
+        appendDebugLog(
+          'error',
+          `Input continuation failed (${input.targetKnot}): ${err instanceof Error ? err.message : String(err)}`
+        );
+        persistSnapshot();
       }
     },
 
@@ -2158,6 +2296,7 @@ export const useOsStore = create<OsState>((set, get) => {
 
       set({
         activeChoices: [],
+        pendingInput: null,
         typingContactId: null,
       });
 

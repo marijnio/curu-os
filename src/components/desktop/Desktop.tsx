@@ -30,11 +30,16 @@ export function Desktop() {
   const scenarioId = useOsStore((s) => s.scenarioId);
   const manifest = useOsStore((s) => s.manifest);
   const windows = useOsStore((s) => s.windows);
+  const focusedApp = useOsStore((s) => s.focusedApp);
   const toasts = useOsStore((s) => s.toasts);
   const unreadChatCounts = useOsStore((s) => s.unreadChatCounts);
   const emails = useOsStore((s) => s.emails);
   const files = useOsStore((s) => s.files);
   const unreadNotesCount = useOsStore((s) => s.unreadNotesCount);
+  const activeChoices = useOsStore((s) => s.activeChoices);
+  const pendingInput = useOsStore((s) => s.pendingInput);
+  const activeContactId = useOsStore((s) => s.activeContactId);
+  const activeEmailId = useOsStore((s) => s.activeEmailId);
   const t = useOsStore(selectTranslations);
 
   const openApp = useOsStore((s) => s.openApp);
@@ -76,6 +81,31 @@ export function Desktop() {
   const totalMailUnread = emails.filter((e) => !e.read).length;
   const totalFilesUnread = files.filter((f) => !f.opened).length;
 
+  const isMessagesFocused =
+    windows.messages.isOpen &&
+    !windows.messages.isMinimized &&
+    focusedApp === 'messages';
+  const hasPendingChatAction =
+    activeChoices.some(
+      (c) =>
+        c.channel === 'chat' &&
+        (!isMessagesFocused || c.targetId !== activeContactId)
+    ) ||
+    Boolean(
+      pendingInput &&
+        (!isMessagesFocused || pendingInput.targetContactId !== activeContactId)
+    );
+
+  const isMailFocused =
+    windows.mail.isOpen &&
+    !windows.mail.isMinimized &&
+    focusedApp === 'mail';
+  const hasPendingMailAction = activeChoices.some(
+    (c) =>
+      c.channel === 'email' &&
+      (!isMailFocused || c.targetId !== activeEmailId)
+  );
+
   const wallpaperStyle: CSSProperties = {};
   if (manifest?.theme?.wallpaperColor) {
     wallpaperStyle.backgroundColor = manifest.theme.wallpaperColor;
@@ -106,6 +136,8 @@ export function Desktop() {
             </div>
           }
           badgeCount={totalChatUnread}
+          hasPendingAction={hasPendingChatAction}
+          pendingActionTitle={t.taskbar.pendingReply}
           selected={selectedIcon === 'messages'}
           onSelect={() => setSelectedIcon('messages')}
           onOpen={() => openApp('messages')}
@@ -118,6 +150,8 @@ export function Desktop() {
             </div>
           }
           badgeCount={totalMailUnread}
+          hasPendingAction={hasPendingMailAction}
+          pendingActionTitle={t.taskbar.pendingReply}
           selected={selectedIcon === 'mail'}
           onSelect={() => setSelectedIcon('mail')}
           onOpen={() => openApp('mail')}

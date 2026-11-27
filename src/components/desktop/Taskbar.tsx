@@ -22,10 +22,39 @@ export function Taskbar() {
   const emails = useOsStore((s) => s.emails);
   const files = useOsStore((s) => s.files);
   const unreadNotesCount = useOsStore((s) => s.unreadNotesCount);
+  const activeChoices = useOsStore((s) => s.activeChoices);
+  const pendingInput = useOsStore((s) => s.pendingInput);
+  const activeContactId = useOsStore((s) => s.activeContactId);
+  const activeEmailId = useOsStore((s) => s.activeEmailId);
 
   const totalChatUnread = Object.values(unreadChatCounts).reduce((a, b) => a + b, 0);
   const totalMailUnread = emails.filter((e) => !e.read).length;
   const totalFilesUnread = files.filter((f) => !f.opened).length;
+
+  const isMessagesFocused =
+    windows.messages.isOpen &&
+    !windows.messages.isMinimized &&
+    focusedApp === 'messages';
+  const hasPendingChatAction =
+    activeChoices.some(
+      (c) =>
+        c.channel === 'chat' &&
+        (!isMessagesFocused || c.targetId !== activeContactId)
+    ) ||
+    Boolean(
+      pendingInput &&
+        (!isMessagesFocused || pendingInput.targetContactId !== activeContactId)
+    );
+
+  const isMailFocused =
+    windows.mail.isOpen &&
+    !windows.mail.isMinimized &&
+    focusedApp === 'mail';
+  const hasPendingMailAction = activeChoices.some(
+    (c) =>
+      c.channel === 'email' &&
+      (!isMailFocused || c.targetId !== activeEmailId)
+  );
 
   const badgeByApp: Record<AppId, number> = {
     messages: totalChatUnread,
@@ -33,6 +62,14 @@ export function Taskbar() {
     explorer: totalFilesUnread,
     notes: unreadNotesCount,
     director: 0,
+  };
+
+  const pendingActionByApp: Record<AppId, boolean> = {
+    messages: hasPendingChatAction,
+    mail: hasPendingMailAction,
+    explorer: false,
+    notes: false,
+    director: false,
   };
 
   const renderTaskIcon = (id: AppId) => {
@@ -98,6 +135,7 @@ export function Taskbar() {
             const win = windows[appId];
             const isActive = win.isOpen && !win.isMinimized && focusedApp === appId;
             const badge = badgeByApp[appId];
+            const hasPendingAction = pendingActionByApp[appId];
             const label = t.apps[appId];
 
             return (
@@ -105,7 +143,9 @@ export function Taskbar() {
                 key={appId}
                 type="button"
                 onClick={() => handleTaskButton(appId)}
-                title={label}
+                title={
+                  hasPendingAction ? `${label} — ${t.taskbar.pendingReply}` : label
+                }
                 className={`relative flex h-10 items-center gap-2 px-3.5 text-xs transition-colors ${
                   isActive
                     ? 'bg-[#272b34] text-white'
@@ -116,10 +156,20 @@ export function Taskbar() {
               >
                 {renderTaskIcon(appId)}
                 <span className="hidden md:inline font-normal">{label}</span>
-                {badge > 0 && (
+                {badge > 0 ? (
                   <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d93025] px-1 text-[10px] font-bold text-white">
                     {badge > 9 ? '9+' : badge}
                   </span>
+                ) : (
+                  hasPendingAction && (
+                    <span
+                      className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center"
+                      aria-hidden="true"
+                    >
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#4ca3dd] opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ca3dd]" />
+                    </span>
+                  )
                 )}
                 {win.isOpen && (
                   <span
