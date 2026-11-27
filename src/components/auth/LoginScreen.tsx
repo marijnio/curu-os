@@ -12,7 +12,6 @@ import {
   Monitor,
   Play,
   RotateCcw,
-  Sparkles,
   User,
 } from 'lucide-react';
 import { normalizePlayerPrompt, sanitizePlayerInput } from '../../engine/templateVars';
@@ -126,49 +125,42 @@ export function LoginScreen() {
     (!activePrompt || !activePrompt.required || cleanedName.length > 0);
 
   return (
-    <div className="curu-wallpaper relative flex h-screen w-screen items-center justify-center overflow-auto p-4 text-slate-100">
-      {/* Subtle workstation grid glow */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(76,163,221,0.16),_transparent_55%)]" />
-
+    <div className="curu-wallpaper relative flex h-screen w-screen items-center justify-center overflow-auto p-4 text-slate-900">
       {appPhase === 'booting' && (
-        <div className="relative z-10 flex items-center gap-3 rounded-[3px] border border-[#323742] bg-[#1b1e24] px-6 py-4 text-sm text-slate-200 shadow-2xl">
-          <Loader2 className="h-4 w-4 animate-spin text-[#4ca3dd]" />
-          Initializing workstation...
+        <div className="flex items-center gap-3 rounded-[2px] border border-slate-300 bg-white px-5 py-3.5 text-sm text-slate-800 shadow-xl">
+          <Loader2 className="h-4 w-4 animate-spin text-[#0067c0]" />
+          Initializing workspace...
         </div>
       )}
 
       {appPhase === 'login' && (
-        <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[3px] border border-[#323742] bg-[#1b1e24] shadow-2xl">
-          <div className="border-b border-[#2c313b] bg-[#14171c] px-5 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-[2px] bg-[#0067c0] text-white shadow-sm">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <div>
-                  <h1 className="text-sm font-semibold text-white">
-                    Curu-OS Workstation
-                  </h1>
-                  <p className="text-[11px] text-slate-400">
-                    Access Restricted
-                  </p>
-                </div>
+        <div className="w-full max-w-sm overflow-hidden rounded-[3px] border border-[#2b3b55] bg-white text-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.42)]">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-[3px] bg-[#0067c0] text-white shadow-2xs">
+                <Lock className="h-4 w-4" />
               </div>
-              <span className="rounded-[2px] bg-[#262b35] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-                AUTH
-              </span>
+              <div>
+                <h1 className="text-sm font-semibold text-slate-900">
+                  Curu-OS Workstation
+                </h1>
+                <p className="text-[11px] text-slate-500">Access Restricted</p>
+              </div>
             </div>
+            <span className="rounded border border-slate-200 bg-[#f8f9fa] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+              AUTH
+            </span>
           </div>
 
-          <form onSubmit={(e) => void handleLoginSubmit(e)} className="p-5 space-y-4">
-            <p className="text-xs leading-relaxed text-slate-300">
+          <form onSubmit={(e) => void handleLoginSubmit(e)} className="p-5 space-y-4 bg-white">
+            <p className="text-xs leading-relaxed text-slate-600">
               Enter your access password to unlock available scenarios.
             </p>
 
             <div>
               <label
                 htmlFor="curu-password"
-                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400"
+                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-600"
               >
                 Access Password
               </label>
@@ -182,13 +174,13 @@ export function LoginScreen() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password..."
-                  className="w-full rounded-[2px] border border-[#3d414a] bg-[#14171c] py-2 pr-9 pl-3 text-xs text-white placeholder:text-slate-500 outline-none focus:border-[#4ca3dd] disabled:opacity-60"
+                  className="w-full rounded-[3px] border border-slate-300 bg-white py-2 pr-9 pl-3 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0067c0] disabled:bg-slate-50 disabled:opacity-60"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2.5 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  className="absolute right-2.5 text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOff className="h-3.5 w-3.5" />
@@ -200,8 +192,8 @@ export function LoginScreen() {
             </div>
 
             {authError && (
-              <div className="flex items-start gap-2 rounded-[2px] border border-rose-500/40 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <div className="flex items-start gap-2 rounded-[3px] border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" />
                 <span>{authError}</span>
               </div>
             )}
@@ -209,7 +201,7 @@ export function LoginScreen() {
             <button
               type="submit"
               disabled={submittingAuth || password.length === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-[2px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              className="flex w-full items-center justify-center gap-2 rounded-[3px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {submittingAuth ? (
                 <>
@@ -228,24 +220,24 @@ export function LoginScreen() {
       )}
 
       {appPhase === 'select_scenario' && (
-        <div className="relative z-10 w-full max-w-3xl overflow-hidden rounded-[3px] border border-[#323742] bg-[#1b1e24] shadow-2xl">
+        <div className="w-full max-w-3xl overflow-hidden rounded-[3px] border border-[#2b3b55] bg-white text-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.42)]">
           {/* Header */}
-          <header className="flex items-center justify-between border-b border-[#2c313b] bg-[#14171c] px-5 py-3.5">
+          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-[2px] bg-[#0067c0] text-white shadow-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-[3px] bg-[#0067c0] text-white shadow-2xs">
                 <Monitor className="h-4 w-4" />
               </div>
               <div>
-                <h1 className="text-sm font-semibold text-white">Curu-OS</h1>
-                <p className="text-[11px] text-slate-400">
+                <h1 className="text-sm font-semibold text-slate-900">Curu-OS</h1>
+                <p className="text-[11px] text-slate-500">
                   Select a scenario to start your shift
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-[2px] bg-[#262b35] px-2 py-1 font-mono text-[10px] text-slate-300">
-                <Layers className="h-3 w-3 text-[#4ca3dd]" />
+            <div className="flex items-center gap-2.5">
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded border border-slate-200 bg-[#f8f9fa] px-2 py-1 font-mono text-[10px] text-slate-600">
+                <Layers className="h-3 w-3 text-[#0067c0]" />
                 {availableScenarios.length}{' '}
                 {availableScenarios.length === 1 ? 'Scenario' : 'Scenarios'}
               </span>
@@ -254,9 +246,9 @@ export function LoginScreen() {
                 <button
                   type="button"
                   onClick={() => void logout()}
-                  className="inline-flex items-center gap-1.5 rounded-[2px] border border-[#3d414a] bg-[#262b35] px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-[#323845] cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[3px] border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 cursor-pointer"
                 >
-                  <LogOut className="h-3 w-3 text-slate-400" />
+                  <LogOut className="h-3 w-3 text-slate-500" />
                   Sign Out
                 </button>
               )}
@@ -264,15 +256,15 @@ export function LoginScreen() {
           </header>
 
           {loadError && (
-            <div className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-950/35 px-5 py-2.5 text-xs text-rose-200">
+            <div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-5 py-2.5 text-xs text-rose-700">
               <span className="flex items-center gap-2 min-w-0">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                 <span className="truncate">{loadError}</span>
               </span>
               <button
                 type="button"
                 onClick={() => void initApp()}
-                className="shrink-0 rounded-[2px] border border-rose-400/40 bg-rose-900/40 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-rose-800/50 cursor-pointer"
+                className="shrink-0 rounded-[3px] border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 cursor-pointer"
               >
                 Retry
               </button>
@@ -280,17 +272,17 @@ export function LoginScreen() {
           )}
 
           {availableScenarios.length === 0 ? (
-            <div className="p-10 text-center text-xs text-slate-400">
+            <div className="p-10 text-center text-xs text-slate-500">
               No scenarios were found in the scenario index.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-5">
               {/* Left Column: Scenario List */}
-              <aside className="border-b border-[#2c313b] bg-[#171a20] md:col-span-2 md:border-r md:border-b-0">
-                <div className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-[#2c313b]">
+              <aside className="border-b border-slate-200 bg-[#f8f9fa] md:col-span-2 md:border-r md:border-b-0">
+                <div className="border-b border-slate-200 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   Available Scenarios
                 </div>
-                <div className="max-h-[380px] overflow-y-auto divide-y divide-[#252932]">
+                <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-200/80">
                   {availableScenarios.map((sc) => {
                     const isSelected = selectedScenario?.id === sc.id;
                     const scPrompt = normalizePlayerPrompt(sc.playerPrompt);
@@ -304,34 +296,28 @@ export function LoginScreen() {
                         key={sc.id}
                         type="button"
                         onClick={() => setSelectedId(sc.id)}
-                        className={`flex w-full flex-col gap-1 border-l-[3px] px-4 py-3 text-left transition cursor-pointer ${
+                        className={`flex w-full flex-col gap-1 border-l-[3px] px-4 py-3 text-left transition-colors cursor-pointer ${
                           isSelected
-                            ? 'border-l-[#4ca3dd] bg-[#242c3a] text-white'
-                            : 'border-l-transparent text-slate-300 hover:bg-[#22262f]'
+                            ? 'border-l-[#0067c0] bg-[#e5f1fb] text-slate-950'
+                            : 'border-l-transparent text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="text-xs font-semibold leading-snug">
+                        <div className="text-xs font-semibold leading-snug text-slate-900">
                           {sc.title}
                         </div>
                         {sc.subtitle && (
-                          <div className="text-[11px] text-slate-400 truncate">
+                          <div className="truncate text-[11px] text-slate-500">
                             {sc.subtitle}
                           </div>
                         )}
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {scSaved && (
-                            <span className="inline-flex items-center gap-1 rounded-[2px] bg-[#1e3a5f] px-1.5 py-0.5 text-[10px] font-medium text-[#7cc4f5]">
+                        {scSaved && (
+                          <div className="mt-1 flex items-center">
+                            <span className="inline-flex items-center gap-1 rounded bg-[#e5f1fb] px-1.5 py-0.5 text-[10px] font-semibold text-[#005aa8] ring-1 ring-[#cde0f5]">
                               <Clock className="h-2.5 w-2.5" />
                               In Progress
                             </span>
-                          )}
-                          {scPrompt && (
-                            <span className="inline-flex items-center gap-1 rounded-[2px] bg-[#262b35] px-1.5 py-0.5 text-[10px] text-slate-300">
-                              <Sparkles className="h-2.5 w-2.5 text-amber-400" />
-                              Personalized
-                            </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -339,20 +325,20 @@ export function LoginScreen() {
               </aside>
 
               {/* Right Column: Launch Panel */}
-              <section className="relative flex flex-col justify-between p-5 md:col-span-3">
+              <section className="relative flex flex-col justify-between bg-white p-5 md:col-span-3">
                 {selectedScenario && (
                   <div className="space-y-4">
                     <div>
-                      <div className="text-base font-semibold text-white leading-snug">
+                      <div className="text-base font-semibold leading-snug text-slate-900">
                         {selectedScenario.title}
                       </div>
                       {selectedScenario.subtitle && (
-                        <div className="mt-0.5 text-xs text-[#7cc4f5]">
+                        <div className="mt-0.5 text-xs font-medium text-[#0067c0]">
                           {selectedScenario.subtitle}
                         </div>
                       )}
                       {selectedScenario.description && (
-                        <p className="mt-3 text-xs leading-relaxed text-slate-300">
+                        <p className="mt-3 text-xs leading-relaxed text-slate-600">
                           {selectedScenario.description}
                         </p>
                       )}
@@ -360,18 +346,18 @@ export function LoginScreen() {
 
                     {savedMeta && !freshMode ? (
                       <div className="space-y-3 pt-1">
-                        <div className="rounded-[2px] border border-[#2f4562] bg-[#172230] p-3.5 space-y-1.5">
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7cc4f5]">
+                        <div className="rounded-[3px] border border-[#cde0f5] bg-[#f4f8fd] p-3.5 space-y-1.5">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-[#005aa8]">
                             Saved Session Available
                           </div>
-                          <div className="font-mono text-xs text-slate-200">
+                          <div className="font-mono text-xs text-slate-800">
                             {savedMeta.clockStr} · {savedMeta.dayLabel}
                           </div>
                           {savedMeta.playerName && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                              <User className="h-3 w-3 text-[#7cc4f5]" />
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-700">
+                              <User className="h-3 w-3 text-[#0067c0]" />
                               Signed in as{' '}
-                              <span className="font-semibold text-white">
+                              <span className="font-semibold text-slate-900">
                                 {savedMeta.playerName}
                               </span>
                             </div>
@@ -383,7 +369,7 @@ export function LoginScreen() {
                             type="button"
                             disabled={isLoading}
                             onClick={() => void loadScenario(selectedScenario.id)}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-[2px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:opacity-50 cursor-pointer"
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-[3px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:opacity-50 cursor-pointer"
                           >
                             {isLoading ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -404,9 +390,9 @@ export function LoginScreen() {
                                 });
                               }
                             }}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-[2px] border border-[#3d414a] bg-[#262b35] px-3.5 py-2 text-xs font-medium text-slate-200 transition hover:bg-[#323845] disabled:opacity-50 cursor-pointer"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-[3px] border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
                           >
-                            <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                            <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
                             Start Fresh
                           </button>
                         </div>
@@ -414,17 +400,17 @@ export function LoginScreen() {
                     ) : (
                       <form onSubmit={handleLaunchFresh} className="space-y-4 pt-1">
                         {activePrompt && (
-                          <div className="rounded-[2px] border border-[#2c313b] bg-[#14171c] p-3.5 space-y-2">
+                          <div className="rounded-[3px] border border-slate-200 bg-[#f8f9fa] p-3.5 space-y-2">
                             <label
                               htmlFor="curu-player-name"
-                              className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-300"
+                              className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-700"
                             >
                               <span className="flex items-center gap-1.5">
-                                <User className="h-3.5 w-3.5 text-[#4ca3dd]" />
+                                <User className="h-3.5 w-3.5 text-[#0067c0]" />
                                 {activePrompt.label}
                               </span>
                               {activePrompt.required && (
-                                <span className="text-[10px] font-normal text-slate-400">
+                                <span className="text-[10px] font-normal text-slate-500">
                                   Required
                                 </span>
                               )}
@@ -438,10 +424,10 @@ export function LoginScreen() {
                               value={nameValue}
                               onChange={(e) => setNameValue(e.target.value)}
                               placeholder={activePrompt.placeholder}
-                              className="w-full rounded-[2px] border border-[#3d414a] bg-[#1b1e24] px-3 py-2 text-xs text-white placeholder:text-slate-500 outline-none focus:border-[#4ca3dd] disabled:opacity-60"
+                              className="w-full rounded-[3px] border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#0067c0] disabled:bg-slate-50 disabled:opacity-60"
                             />
                             {activePrompt.helperText && (
-                              <p className="text-[11px] leading-relaxed text-slate-400">
+                              <p className="text-[11px] leading-relaxed text-slate-500">
                                 {activePrompt.helperText}
                               </p>
                             )}
@@ -452,7 +438,7 @@ export function LoginScreen() {
                           <button
                             type="submit"
                             disabled={!canSubmitFresh}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-[2px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-[3px] bg-[#0067c0] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#005aa8] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                           >
                             {isLoading ? (
                               <>
@@ -471,7 +457,7 @@ export function LoginScreen() {
                             <button
                               type="button"
                               onClick={() => setFreshMode(false)}
-                              className="text-xs text-slate-400 underline decoration-slate-600 hover:text-slate-200 cursor-pointer"
+                              className="text-xs text-slate-500 underline decoration-slate-400 hover:text-slate-900 cursor-pointer"
                             >
                               Back to Resume
                             </button>
@@ -483,9 +469,9 @@ export function LoginScreen() {
                 )}
 
                 {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#1b1e24]/80">
-                    <div className="flex items-center gap-2.5 rounded-[2px] border border-[#323742] bg-[#14171c] px-4 py-2.5 text-xs text-slate-200 shadow-lg">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#4ca3dd]" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+                    <div className="flex items-center gap-2.5 rounded-[3px] border border-slate-300 bg-white px-4 py-2.5 text-xs text-slate-800 shadow-lg">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#0067c0]" />
                       Loading scenario...
                     </div>
                   </div>
