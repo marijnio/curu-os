@@ -58,7 +58,7 @@ export function StartMenu() {
             )}
           </div>
           <span className="shrink-0 rounded-[2px] bg-[#262b35] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-            {manifest?.theme?.osVersion || 'v0.5'}
+            {manifest?.theme?.osVersion || 'v0.6'}
           </span>
         </div>
       </div>
