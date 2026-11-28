@@ -1,6 +1,14 @@
-# Curu-OS
+<p align="center">
+  <img src="docs/assets/curu-tan.png" alt="Curu-tan — Curu-OS mascot" width="220" />
+</p>
 
-**Curu-OS** is a browser-based narrative simulation engine disguised as an everyday workplace desktop environment. Stories run through diegetic workplace tools — **Messages**, **Mail**, **File Explorer**, and **Notes** (resizable multi-window desktop with search, notification chimes, and autosave) — powered by **Ink (`inkjs`)**, **Markdown**, **images**, and **audio**.
+<h1 align="center">Curu-OS</h1>
+
+<p align="center">
+  A browser-based narrative simulation engine disguised as an everyday workplace desktop environment.
+</p>
+
+Stories run through diegetic workplace tools — **Messages**, **Mail**, **File Explorer**, and **Notes** (resizable multi-window desktop with search, notification chimes, and autosave) — powered by **Ink (`inkjs`)**, **Markdown**, **images**, and **audio**.
 
 ## Tech Stack
 
